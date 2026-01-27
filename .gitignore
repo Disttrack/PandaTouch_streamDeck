@@ -1,3 +1,26 @@
+# PlatformIO
 .pio
-.vscode
+.pioenvs
+.piolibdeps
+.clang_complete
+.gcc-flags.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Python (Virtualenvs)
+venv/
+.venv/
+__pycache__/
+
+# Build artifacts
+*.bin
+*.elf
+build_out*.txt

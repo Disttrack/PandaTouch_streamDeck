@@ -1,67 +1,45 @@
-# PandaTouch Arduino Template
+# PandaTouch Bluetooth StreamDeck
 
-A ready-to-use **PlatformIO project** for the [PandaTouch](https://bttwiki.com/PandaTouch.html) (ESP32-S3).  
-It brings up the **800×480 RGB LCD**, **GT911 touch controller**, and **LVGL v9.3** — so you can start building GUIs right away.
+Transforma tu **PandaTouch (ESP32-S3)** en un potente **StreamDeck Bluetooth nativo (HID)**. No requiere drivers ni software adicional en el PC, funciona como un teclado Bluetooth estándar.
 
-<img src="docs/images/pandatouch.png" width="256" style="padding:64px; background-color:#fff; border-radius:8px;">
+![PandaTouch](docs/images/pandatouch.png)
 
-> **Important: tearing / display glitches warning**
->
-> Building with the Arduino framework via PlatformIO works well for most users, but some display tearing, flicker or other timing-related artifacts can still occur on the RGB parallel LCD. These issues are commonly caused by low-level PSRAM/flash timing and memory configuration values that the Arduino core doesn't expose or allow you to tweak. The ESP-IDF gives direct control over these critical timings and is the most reliable way to achieve deterministic, tear-free behavior.
->
-> If you need a more deterministic solution, use the IDF-based PandaTouch component at: https://github.com/bigtreetech/PandaTouch_IDF
->
-> The `pandatouch-arduino-3x` environment (Arduino core 3.x) may mitigate some timing problems because it bundles newer SDK libs, but it does not always fully eliminate tearing — IDF is preferred for hard real-time/timing-sensitive scenarios.
+## ✨ Características (Fork mejorado)
 
-## Table of contents
+- ⌨️ **Bluetooth HID Nativo**: El dispositivo se identifica como un teclado Bluetooth. Sin latencia y sin necesidad de WiFi.
+- 🍏🪟 **Soporte Dual Nativo (macOS y Windows)**: Perfiles independientes y automáticos para ambos sistemas. Tecla CMD/GUI adaptada.
+- 🚀 **Escritura Ultra-Rápida (Modo Turbo)**: Lanzamiento de apps en menos de 1 segundo (Typing delay reducido a 5ms).
+- 📂 **Almacenamiento LittleFS**: Sistema de archivos robusto para guardar configuraciones e iconos personalizados sin límites de NVS.
+- 🌐 **Panel Web Completo**: Configura botones, iconos, colores de fondo y Red WiFi cómodamente desde tu navegador.
+- 🔄 **Actualización Web OTA**: Sube nuevos firmwares (.bin) directamente desde el panel web, sin cables.
+- 🔐 **Seguridad Simplificada**: Configurado para emparejamiento fácil sin errores de SMP.
+- 💡 **Control de Brillo**: Ajuste táctil en tiempo real.
 
-- [What’s inside](#whats-inside)
-- [Quick start](#quick-start)
-- [Using the template](#using-the-template)
-- [Render mode quick reference](#render-mode-quick-ref)
-- [Arduino Core Selection](#arduino-core-selection)
-- [Recommended defaults for PandaTouch](#recommended-defaults-for-pandatouch)
-- [Common pitfalls (and fixes)](#common-pitfalls)
-- [Example: full `platformio.ini` skeleton](#example-platformioini)
-- [Hardware specs](#hardware-specs)
-- [Troubleshooting](#troubleshooting)
-- [Resources](#resources)
-- [FAQ](#faq)
+## 🚀 Inicio Rápido
 
-<a id="whats-inside"></a>
+### 1. Requisitos
 
-## ✨ What’s inside
+- [PlatformIO](https://platformio.org/install/ide?install=vscode) (Recomendado VS Code)
+- Dispositivo PandaTouch (BigTreeTech)
 
-- 📦 **PlatformIO template** for ESP32-S3 (Arduino framework)
-- 🖼️ **LVGL v9.3.0** graphics library integrated
-- 👆 **GT911 capacitive touch** driver (I²C)
-- 🖥️ **RGB parallel LCD** @ 800×480, RGB565
-- 🌗 **Backlight brightness control** via LEDC (PWM) with persistence
-- ⚡ Optimized LVGL **partial draw buffers** (PSRAM-aware)
-- 🧪 Demo apps (brightness slider, Hello World)
-
-Perfect if you’re:
-
-- A maker getting started with PandaTouch
-- An embedded dev needing a quick LVGL boilerplate
-- An engineer prototyping a custom UI on ESP32-S3
-
-<a id="quick-start"></a>
-
-## 🚀 Quick start
-
-### 1. Install prerequisites
-
-- [PlatformIO](https://platformio.org/install/ide?install=vscode) (VS Code recommended)
-- USB drivers (if your OS needs them)
-- PandaTouch Unit
-
-### 2. Clone this repo
+### 2. Compilar y Subir
 
 ```bash
-git https://github.com/bigtreetech/PandaTouch_PlatformIO.git
-cd PandaTouch_PlatformIO
+# Limpiar y compilar
+pio run -t clean
+pio run
+
+# Subir al dispositivo (ajusta el puerto COM según sea necesario)
+pio run -t upload --upload-port COM9
 ```
+
+### 3. Emparejamiento
+
+1. En Windows, ve a **Configuración > Bluetooth y dispositivos**.
+2. Dale a **Agregar dispositivo** -> **Bluetooth**.
+3. Selecciona **"PandaTouch Deck"**.
+4. Una vez conectado, el PandaTouch mostrará en el puerto serial el mensaje de éxito y estará listo para usar.
+
 
 ### 3. Build & upload
 

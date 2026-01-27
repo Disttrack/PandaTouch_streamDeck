@@ -42,7 +42,7 @@
 #define PT_LCD_BL_FREQUENCY_HZ 30000
 
 // GT911 Touch
-#define PT_I2C0_SPEED 400000
+#define PT_I2C0_SPEED 100000
 #define PT_I2C0_SCL_PIN 1
 #define PT_I2C0_SDA_PIN 2
 

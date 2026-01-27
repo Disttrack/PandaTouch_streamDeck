@@ -60,10 +60,10 @@ TAMC_GT911 pt_touchpanel(
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 Arduino_ESP32RGBPanel pt_rgbpanel(
     PT_LCD_DE_PIN, PT_LCD_VSYNC_PIN, PT_LCD_HSYNC_PIN, PT_LCD_PCLK_PIN,
-    // Data pins: B3-B7, G2-G7, R3-R7 (HAL/data_gpio_nums order)
-    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
-    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
+    // Data pins: R3-R7, G2-G7, B3-B7 (Correct RGB order)
     PT_LCD_R3_PIN, PT_LCD_R4_PIN, PT_LCD_R5_PIN, PT_LCD_R6_PIN, PT_LCD_R7_PIN,
+    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
+    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
     0 /* hsync_polarity */, PT_LCD_HSYNC_PULSE_WIDTH, PT_LCD_HSYNC_BACK_PORCH, PT_LCD_HSYNC_FRONT_PORCH,
     0 /* vsync_polarity */, PT_LCD_VSYNC_PULSE_WIDTH, PT_LCD_VSYNC_BACK_PORCH, PT_LCD_VSYNC_FRONT_PORCH,
     1 /* pclk_active_neg */,
@@ -72,10 +72,10 @@ Arduino_ESP32RGBPanel pt_rgbpanel(
 #else
 Arduino_ESP32RGBPanel pt_rgbpanel(
     PT_LCD_DE_PIN, PT_LCD_VSYNC_PIN, PT_LCD_HSYNC_PIN, PT_LCD_PCLK_PIN,
-    // Data pins: B3-B7, G2-G7, R3-R7 (HAL/data_gpio_nums order)
-    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
-    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
+    // Data pins: R3-R7, G2-G7, B3-B7 (Correct RGB order)
     PT_LCD_R3_PIN, PT_LCD_R4_PIN, PT_LCD_R5_PIN, PT_LCD_R6_PIN, PT_LCD_R7_PIN,
+    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
+    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
     0 /* hsync_polarity */, PT_LCD_HSYNC_PULSE_WIDTH, PT_LCD_HSYNC_BACK_PORCH, PT_LCD_HSYNC_FRONT_PORCH,
     0 /* vsync_polarity */, PT_LCD_VSYNC_PULSE_WIDTH, PT_LCD_VSYNC_BACK_PORCH, PT_LCD_VSYNC_FRONT_PORCH,
     1 /* pclk_active_neg */,
@@ -217,7 +217,7 @@ static void pt_init_backlight(uint8_t set_percent)
  * @brief Flushes the display buffer to the screen.
  *
  * This function is called by LVGL to update the display with the contents of the
- * provided pixel map. It uses the graphics library to draw the bitmap on the screen.
+ * provided pixel map.
  *
  * @param disp Pointer to the LVGL display object.
  * @param area Pointer to the area to be updated.
@@ -227,6 +227,9 @@ inline void pt_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 {
   uint32_t w = lv_area_get_width(area);
   uint32_t h = lv_area_get_height(area);
+
+  // In 16-bit mode, we can directly draw the 16-bit bitmap.
+  // The Red/Blue swap is handled by corrected pin assignment in the constructor.
   pt_gfx.draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)px_map, w, h);
 
   lv_disp_flush_ready(disp);
@@ -249,9 +252,14 @@ inline void pt_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
     {
       if (i == 0)
       {
-        data->state = LV_INDEV_STATE_PRESSED;
-        data->point.x = pt_touchpanel.points[i].x;
-        data->point.y = pt_touchpanel.points[i].y;
+        // Validate coordinates to avoid 65535 or out of bounds on I2C failure
+        if (pt_touchpanel.points[i].x < 800 && pt_touchpanel.points[i].y < 480) {
+            data->state = LV_INDEV_STATE_PRESSED;
+            data->point.x = pt_touchpanel.points[i].x;
+            data->point.y = pt_touchpanel.points[i].y;
+        } else {
+            data->state = LV_INDEV_STATE_RELEASED;
+        }
       }
     }
   }
@@ -272,7 +280,6 @@ inline void pt_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
  */
 inline void pt_setup_display(PT_LVGL_render_method_t mode = (PT_LVGL_render_method_t)PT_LVGL_RENDER_METHOD)
 {
-
   uint32_t screenWidth;
   uint32_t screenHeight;
   uint32_t bufSize;
@@ -285,13 +292,13 @@ inline void pt_setup_display(PT_LVGL_render_method_t mode = (PT_LVGL_render_meth
   delay(10);
 
   // Backlight setup
-  pt_init_backlight(100); // Set backlight to max brightness (100%)
+  pt_init_backlight(100); 
   ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (1 << LEDC_TIMER_11_BIT) - 1);
   ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
   // Panel bring-up
   pt_gfx.begin();
-  pt_gfx.fillScreen(0x000000); // Hardware test (black)
+  pt_gfx.fillScreen(0x000000);
 
   // Touch
   pt_touchpanel.begin();
@@ -304,155 +311,63 @@ inline void pt_setup_display(PT_LVGL_render_method_t mode = (PT_LVGL_render_meth
   screenWidth = pt_gfx.width();
   screenHeight = pt_gfx.height();
 
-  // Decide buffer strategy based on render method
-  // A small helper for allocation with preferred PSRAM or internal
+  // Create display
+  disp = lv_display_create(screenWidth, screenHeight);
+  lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+  lv_display_set_flush_cb(disp, pt_disp_flush);
+
+  // Allocation helper
   auto alloc_buf = [&](size_t count, bool prefer_psram) -> lv_color_t *
   {
     int caps = MALLOC_CAP_8BIT;
-    if (prefer_psram)
-      caps |= MALLOC_CAP_SPIRAM;
+    if (prefer_psram) caps |= MALLOC_CAP_SPIRAM;
     return (lv_color_t *)heap_caps_malloc(count * sizeof(lv_color_t), caps);
   };
 
   switch (mode)
   {
   case PT_LVGL_RENDER_FULL_1:
-    // Single full framebuffer in PSRAM
     bufSize = screenWidth * screenHeight;
     pt_disp_draw_buf = alloc_buf(bufSize, true);
     if (pt_disp_draw_buf)
     {
-      disp = lv_display_create(screenWidth, screenHeight);
-      lv_display_set_flush_cb(disp, pt_disp_flush);
       lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_FULL);
       break;
     }
 
-    // If allocation failed, fall through to try other strategies
   case PT_LVGL_RENDER_FULL_2:
-    // Double full framebuffers in PSRAM
     bufSize = screenWidth * screenHeight;
     pt_disp_draw_buf = alloc_buf(bufSize, true);
     if (pt_disp_draw_buf)
-    {
       pt_disp_draw_buf2 = alloc_buf(bufSize, true);
-    }
     if (pt_disp_draw_buf && pt_disp_draw_buf2)
     {
-      disp = lv_display_create(screenWidth, screenHeight);
-      lv_display_set_flush_cb(disp, pt_disp_flush);
       lv_display_set_buffers(disp, pt_disp_draw_buf, pt_disp_draw_buf2, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_FULL);
       break;
     }
-    // If allocation failed, fallback to partial
 
   case PT_LVGL_RENDER_PARTIAL_1:
-    // Small partial buffer in internal RAM preferred
+  case PT_LVGL_RENDER_PARTIAL_1_PSRAM:
     bufSize = screenWidth * PT_LVGL_RENDER_PARTIAL_LINES;
-    pt_disp_draw_buf = alloc_buf(bufSize, false);
-    if (!pt_disp_draw_buf)
-    {
-      // Try PSRAM if internal allocation fails
-      pt_disp_draw_buf = alloc_buf(bufSize, true);
-    }
-    if (!pt_disp_draw_buf)
-    {
-      return; // nothing we can do
-    }
-    disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, pt_disp_flush);
+    pt_disp_draw_buf = alloc_buf(bufSize, mode == PT_LVGL_RENDER_PARTIAL_1_PSRAM);
+    if (!pt_disp_draw_buf) pt_disp_draw_buf = alloc_buf(bufSize, mode != PT_LVGL_RENDER_PARTIAL_1_PSRAM);
+    if (!pt_disp_draw_buf) return;
     lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
     break;
 
   case PT_LVGL_RENDER_PARTIAL_2:
-    // Two partial buffers in internal RAM preferred
-    bufSize = screenWidth * PT_LVGL_RENDER_PARTIAL_LINES;
-    pt_disp_draw_buf = alloc_buf(bufSize, false);
-    if (pt_disp_draw_buf)
-      pt_disp_draw_buf2 = alloc_buf(bufSize, false);
-    if (!pt_disp_draw_buf2)
-    {
-      // try PSRAM for second buffer
-      if (pt_disp_draw_buf)
-        pt_disp_draw_buf2 = alloc_buf(bufSize, true);
-    }
-    // If we still don't have a second buffer, fall back to single partial
-    disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, pt_disp_flush);
-    if (pt_disp_draw_buf && pt_disp_draw_buf2)
-    {
-      lv_display_set_buffers(disp, pt_disp_draw_buf, pt_disp_draw_buf2, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    }
-    else if (pt_disp_draw_buf)
-    {
-      lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    }
-    else
-    {
-      return; // allocation failed
-    }
-    break;
-
-  case PT_LVGL_RENDER_PARTIAL_1_PSRAM:
-    // Small partial buffer in PSRAM
-    bufSize = screenWidth * PT_LVGL_RENDER_PARTIAL_LINES;
-    pt_disp_draw_buf = alloc_buf(bufSize, true);
-    if (!pt_disp_draw_buf)
-    {
-      // try internal
-      pt_disp_draw_buf = alloc_buf(bufSize, false);
-    }
-    if (!pt_disp_draw_buf)
-    {
-      return;
-    }
-    disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, pt_disp_flush);
-    lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    break;
-
   case PT_LVGL_RENDER_PARTIAL_2_PSRAM:
-    // Two partial buffers in PSRAM preferred
-    bufSize = screenWidth * PT_LVGL_RENDER_PARTIAL_LINES;
-    pt_disp_draw_buf = alloc_buf(bufSize, true);
-    if (pt_disp_draw_buf)
-      pt_disp_draw_buf2 = alloc_buf(bufSize, true);
-    if (!pt_disp_draw_buf2)
-    {
-      // try mixed: first internal then psram
-      if (pt_disp_draw_buf)
-        pt_disp_draw_buf2 = alloc_buf(bufSize, false);
-    }
-    disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, pt_disp_flush);
-    if (pt_disp_draw_buf && pt_disp_draw_buf2)
-    {
-      lv_display_set_buffers(disp, pt_disp_draw_buf, pt_disp_draw_buf2, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    }
-    else if (pt_disp_draw_buf)
-    {
-      lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    }
-    else
-    {
-      return; // allocation failed
-    }
-    break;
-
   default:
-    // Unknown mode: fallback to partial double-buffer default
     bufSize = screenWidth * PT_LVGL_RENDER_PARTIAL_LINES;
-    pt_disp_draw_buf = alloc_buf(bufSize, false);
-    if (pt_disp_draw_buf)
-      pt_disp_draw_buf2 = alloc_buf(bufSize, false);
-    disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, pt_disp_flush);
+    bool use_psram = (mode == PT_LVGL_RENDER_PARTIAL_2_PSRAM);
+    pt_disp_draw_buf = alloc_buf(bufSize, use_psram);
+    if (pt_disp_draw_buf) pt_disp_draw_buf2 = alloc_buf(bufSize, use_psram);
+    
     if (pt_disp_draw_buf && pt_disp_draw_buf2)
       lv_display_set_buffers(disp, pt_disp_draw_buf, pt_disp_draw_buf2, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
     else if (pt_disp_draw_buf)
       lv_display_set_buffers(disp, pt_disp_draw_buf, NULL, bufSize * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    else
-      return;
+    break;
   }
 
   // Touch input device
@@ -473,3 +388,4 @@ inline void pt_loop_display()
 }
 
 #endif // PT_DISPLAY_H
+
