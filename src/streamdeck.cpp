@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <ArduinoJson.h>
 
 extern void set_brightness(uint8_t val);
 
@@ -16,11 +17,20 @@ extern void set_brightness(uint8_t val);
 // ==========================================
 struct ButtonConfig {
     char label[16];
-    char value[128];
+    char value[256];
     uint8_t type; // 0: Command (Win+R), 1: Media Key, 2: Key Combo (Ctrl+X)
     uint32_t color;
     char icon[8]; // Stores LVGL Symbol string (e.g. LV_SYMBOL_PLAY)
     char imgPath[32]; // Path to custom image in LittleFS (e.g. "/chrome.png")
+};
+
+struct LegacyButtonConfig {
+    char label[16];
+    char value[128];
+    uint8_t type;
+    uint32_t color;
+    char icon[8];
+    char imgPath[32];
 };
 
 static ButtonConfig g_configs[20];
@@ -30,6 +40,7 @@ static uint8_t g_cols = 3;
 static uint8_t g_target_os = 0; // 0: Windows, 1: macOS
 static char g_wifi_ssid[32] = "";
 static char g_wifi_pass[64] = "";
+static uint8_t g_kb_lang = 0; // 0: US, 1: Spanish
 static String g_wifi_status = "Disconnected";
 static String g_ip_addr = "0.0.0.0";
 
@@ -89,47 +100,86 @@ static int get_index_by_symbol(const char* sym) {
 }
 
 // ==========================================
-// SPANISH KEYBOARD MAPPING
+// KEYBOARD WRITING LOGIC
 // ==========================================
-static void bleWriteSpanish(char c) {
+static void bleWrite(char c) {
     if (!bleKeyboard.isConnected()) return;
 
-    switch (c) {
-        case ':':
-            bleKeyboard.press(KEY_LEFT_SHIFT);
-            bleKeyboard.write('.');
-            bleKeyboard.releaseAll();
-            break;
-        case '/':
-            bleKeyboard.press(KEY_LEFT_SHIFT);
-            bleKeyboard.write('7');
-            bleKeyboard.releaseAll();
-            break;
-        case '\\':
-            bleKeyboard.press(KEY_LEFT_CTRL);
-            bleKeyboard.press(KEY_LEFT_ALT);
-            bleKeyboard.write('`'); // Matches position of 'º' on many US-interpreted Spanish layouts
-            bleKeyboard.releaseAll();
-            break;
-        case '+':
-            bleKeyboard.write(']'); // US ']' is where Spanish '+' is
-            break;
-        case '*':
-            bleKeyboard.press(KEY_LEFT_SHIFT);
-            bleKeyboard.write(']');
-            bleKeyboard.releaseAll();
-            break;
-        case '-':
-            bleKeyboard.write('/'); // US '/' is where Spanish '-' is
-            break;
-        case '_':
-            bleKeyboard.press(KEY_LEFT_SHIFT);
-            bleKeyboard.write('/');
-            bleKeyboard.releaseAll();
-            break;
-        default:
-            bleKeyboard.write(c);
-            break;
+    if (g_kb_lang == 0) { // US Layout
+        bleKeyboard.write(c);
+    } 
+    else if (g_kb_lang == 1) { // Spanish Layout
+        switch (c) {
+            case '"':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('2');
+                bleKeyboard.releaseAll();
+                break;
+            case '=':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('0');
+                bleKeyboard.releaseAll();
+                break;
+            case '(':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('8');
+                bleKeyboard.releaseAll();
+                break;
+            case ')':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('9');
+                bleKeyboard.releaseAll();
+                break;
+            case '&':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('6');
+                bleKeyboard.releaseAll();
+                break;
+            case ':':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('.');
+                bleKeyboard.releaseAll();
+                break;
+            case ';':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write(',');
+                bleKeyboard.releaseAll();
+                break;
+            case '/':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('7');
+                bleKeyboard.releaseAll();
+                break;
+            case '?':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('\''); // Spanish '?' is Shift+'
+                bleKeyboard.releaseAll();
+                break;
+            case '\\':
+                bleKeyboard.press(KEY_LEFT_CTRL);
+                bleKeyboard.press(KEY_LEFT_ALT);
+                bleKeyboard.write('`'); // Spanish '\' is AltGr+º
+                bleKeyboard.releaseAll();
+                break;
+            case '+':
+                bleKeyboard.write('['); // Spanish '+' is US '['
+                break;
+            case '*':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('['); // Spanish '*' is Shift+'['
+                break;
+            case '-':
+                bleKeyboard.write('/'); // Spanish '-' is US '/'
+                break;
+            case '_':
+                bleKeyboard.press(KEY_LEFT_SHIFT);
+                bleKeyboard.write('/');
+                bleKeyboard.releaseAll();
+                break;
+            default:
+                bleKeyboard.write(c);
+                break;
+        }
     }
 }
 
@@ -152,6 +202,7 @@ static void settings_wifi_btn_cb(lv_event_t* e);
 static void settings_bg_btn_cb(lv_event_t* e);
 static void settings_grid_btn_cb(lv_event_t* e);
 static void settings_os_btn_cb(lv_event_t* e);
+static void settings_lang_btn_cb(lv_event_t* e);
 static void back_to_main_cb(lv_event_t *e);
 static void save_edit_cb(lv_event_t *e);
 static void save_wifi_cb(lv_event_t *e);
@@ -169,15 +220,52 @@ static void load_settings() {
     g_rows = preferences.getUChar("rows", 3);
     g_cols = preferences.getUChar("cols", 3);
     g_target_os = preferences.getUChar("os", 0);
+    g_kb_lang = preferences.getUChar("lang", 0);
     g_bg_color = preferences.getUInt("bg", 0x121212);
     
     // Safety check: if bg_color is pure black, default to dark grey to avoid "black screen" confusion
     if (g_bg_color == 0x000000) g_bg_color = 0x121212;
 
-    Serial.printf("STORAGE: NVS Global: Rows=%d, Cols=%d, OS=%d, BG=0x%06X\n", g_rows, g_cols, g_target_os, g_bg_color);
+    Serial.printf("STORAGE: NVS Global: Rows=%d, Cols=%d, OS=%d, Lang=%d, BG=0x%06X\n", g_rows, g_cols, g_target_os, g_kb_lang, g_bg_color);
 
     const char* win_file = "/win_btns.bin";
     const char* mac_file = "/mac_btns.bin";
+
+    // Automatic Migration Logic
+    auto migrate_file = [](const char* path) {
+        File f = LittleFS.open(path, "r");
+        if (!f) return;
+        size_t size = f.size();
+        if (size == 192 * 20) { // Old size vs 320 * 20 new size
+            Serial.printf("STORAGE: Migrating %s to new format...\n", path);
+            LegacyButtonConfig old_btns[20];
+            f.read((uint8_t*)old_btns, sizeof(old_btns));
+            f.close();
+
+            ButtonConfig new_btns[20];
+            memset(new_btns, 0, sizeof(new_btns));
+            for (int i = 0; i < 20; i++) {
+                strncpy(new_btns[i].label, old_btns[i].label, 15);
+                strncpy(new_btns[i].value, old_btns[i].value, 127);
+                new_btns[i].type = old_btns[i].type;
+                new_btns[i].color = old_btns[i].color;
+                strncpy(new_btns[i].icon, old_btns[i].icon, 7);
+                strncpy(new_btns[i].imgPath, old_btns[i].imgPath, 31);
+            }
+
+            f = LittleFS.open(path, "w");
+            if (f) {
+                f.write((uint8_t*)new_btns, sizeof(new_btns));
+                f.close();
+                Serial.println("STORAGE: Migration successful.");
+            }
+        } else {
+            f.close();
+        }
+    };
+
+    migrate_file(win_file);
+    migrate_file(mac_file);
 
     // Migration/Init for Profiles (v4: LittleFS)
     if (!preferences.getBool("init_os_v4", false)) {
@@ -262,6 +350,7 @@ static void save_settings(bool saveButtons) {
     preferences.putUChar("rows", g_rows);
     preferences.putUChar("cols", g_cols);
     preferences.putUChar("os", g_target_os);
+    preferences.putUChar("lang", g_kb_lang);
     preferences.putString("wssid", g_wifi_ssid);
     preferences.putString("wpass", g_wifi_pass);
     preferences.end();
@@ -385,7 +474,7 @@ void StreamDeckApp::handle_button(uint8_t idx) {
         
         // Ultra-fast typing with 5ms delay
         for(int i=0; cfg.value[i]; i++) {
-            bleWriteSpanish(cfg.value[i]);
+            bleWrite(cfg.value[i]);
             delay(5); 
         }
         
@@ -458,7 +547,7 @@ static void init_webserver() {
             return "None";
         };
 
-        String json = "{\"bg\":\"" + String(g_bg_color, HEX) + "\",\"rows\":" + String(g_rows) + ",\"cols\":" + String(g_cols) + ",\"os\":" + String(g_target_os) + ",\"buttons\":[";
+        String json = "{\"bg\":\"" + String(g_bg_color, HEX) + "\",\"rows\":" + String(g_rows) + ",\"cols\":" + String(g_cols) + ",\"os\":" + String(g_target_os) + ",\"lang\":" + String(g_kb_lang) + ",\"buttons\":[";
         for(int i=0; i<20; i++) {
             json += "{\"label\":\"" + escape_json(String(g_configs[i].label)) + "\",";
             json += "\"value\":\"" + escape_json(String(g_configs[i].value)) + "\",";
@@ -483,11 +572,12 @@ static void init_webserver() {
         if(request->hasParam("rows", true)) g_rows = request->getParam("rows", true)->value().toInt();
         if(request->hasParam("cols", true)) g_cols = request->getParam("cols", true)->value().toInt();
         if(request->hasParam("os", true)) g_target_os = request->getParam("os", true)->value().toInt();
+        if(request->hasParam("lang", true)) g_kb_lang = request->getParam("lang", true)->value().toInt();
 
         for(int i=0; i<20; i++) {
             String p = "b" + String(i);
             if(request->hasParam(p + "l", true)) strncpy(g_configs[i].label, request->getParam(p + "l", true)->value().c_str(), 15);
-            if(request->hasParam(p + "v", true)) strncpy(g_configs[i].value, request->getParam(p + "v", true)->value().c_str(), 127);
+            if(request->hasParam(p + "v", true)) strncpy(g_configs[i].value, request->getParam(p + "v", true)->value().c_str(), 255);
             if(request->hasParam(p + "t", true)) g_configs[i].type = request->getParam(p + "t", true)->value().toInt();
             if(request->hasParam(p + "c", true)) g_configs[i].color = parse_color(request->getParam(p + "c", true)->value());
             
@@ -519,6 +609,105 @@ static void init_webserver() {
         load_settings(); 
         g_pending_ui_update = true;
         request->send(200, "text/plain", "OK");
+    });
+
+    // API: Full Backup (JSON)
+    server.on("/api/backup", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        doc["bg"] = String(g_bg_color, HEX);
+        doc["rows"] = g_rows;
+        doc["cols"] = g_cols;
+        doc["os"] = g_target_os;
+        doc["lang"] = g_kb_lang;
+        doc["wifi_ssid"] = g_wifi_ssid;
+        
+        // Load Windows Buttons
+        ButtonConfig win_btns[20];
+        File f = LittleFS.open("/win_btns.bin", "r");
+        if (f) { f.read((uint8_t*)win_btns, sizeof(win_btns)); f.close(); }
+        JsonArray winArr = doc["win_btns"].to<JsonArray>();
+        for(int i=0; i<20; i++) {
+            JsonObject b = winArr.add<JsonObject>();
+            b["label"] = win_btns[i].label;
+            b["value"] = win_btns[i].value;
+            b["type"] = win_btns[i].type;
+            b["color"] = String(win_btns[i].color, HEX);
+            b["icon"] = win_btns[i].icon;
+            b["img"] = win_btns[i].imgPath;
+        }
+
+        // Load Mac Buttons
+        ButtonConfig mac_btns[20];
+        f = LittleFS.open("/mac_btns.bin", "r");
+        if (f) { f.read((uint8_t*)mac_btns, sizeof(mac_btns)); f.close(); }
+        JsonArray macArr = doc["mac_btns"].to<JsonArray>();
+        for(int i=0; i<20; i++) {
+            JsonObject b = macArr.add<JsonObject>();
+            b["label"] = mac_btns[i].label;
+            b["value"] = mac_btns[i].value;
+            b["type"] = mac_btns[i].type;
+            b["color"] = String(mac_btns[i].color, HEX);
+            b["icon"] = mac_btns[i].icon;
+            b["img"] = mac_btns[i].imgPath;
+        }
+
+        String output;
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
+    });
+
+    // API: Restore (JSON)
+    server.on("/api/restore", HTTP_POST, [](AsyncWebServerRequest *request){
+        // Request handling will be done in the body handler below
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+        static String body = "";
+        if (index == 0) body = "";
+        body += String((char*)data, len);
+        
+        if (index + len == total) {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, body);
+            if (error) {
+                request->send(400, "text/plain", "JSON Parse Error");
+                return;
+            }
+
+            auto parse_color = [](String hex) -> uint32_t {
+                if(hex.startsWith("#")) hex = hex.substring(1);
+                return strtol(hex.c_str(), NULL, 16);
+            };
+
+            if(doc.containsKey("bg")) g_bg_color = parse_color(doc["bg"]);
+            if(doc.containsKey("rows")) g_rows = doc["rows"];
+            if(doc.containsKey("cols")) g_cols = doc["cols"];
+            if(doc.containsKey("os")) g_target_os = doc["os"];
+            if(doc.containsKey("lang")) g_kb_lang = doc["lang"];
+            if(doc.containsKey("wifi_ssid")) strncpy(g_wifi_ssid, doc["wifi_ssid"], 31);
+
+            auto restore_btns = [&](JsonArray arr, const char* path) {
+                ButtonConfig btns[20];
+                memset(btns, 0, sizeof(btns));
+                for(int i=0; i<20 && i<arr.size(); i++) {
+                    JsonObject b = arr[i];
+                    strncpy(btns[i].label, b["label"] | "Button", 15);
+                    strncpy(btns[i].value, b["value"] | "", 255);
+                    btns[i].type = b["type"] | 0;
+                    btns[i].color = parse_color(b["color"] | "333333");
+                    strncpy(btns[i].icon, b["icon"] | "", 7);
+                    strncpy(btns[i].imgPath, b["img"] | "", 31);
+                }
+                File f = LittleFS.open(path, "w");
+                if (f) { f.write((uint8_t*)btns, sizeof(btns)); f.close(); }
+            };
+
+            if(doc.containsKey("win_btns")) restore_btns(doc["win_btns"].as<JsonArray>(), "/win_btns.bin");
+            if(doc.containsKey("mac_btns")) restore_btns(doc["mac_btns"].as<JsonArray>(), "/mac_btns.bin");
+
+            save_settings(false); // Save globals
+            load_settings();     // Reload current active buttons
+            g_pending_ui_update = true;
+            request->send(200, "text/plain", "Restore OK");
+        }
     });
 
     // List files
@@ -611,7 +800,8 @@ static void init_webserver() {
         html += "<style>body{background:#121212;color:white}.card{background:#1e1e1e;border:1px solid #333;color:white;margin-bottom:15px}.btn-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:15px}.btn-del{padding:0 5px;color:#ff4444;cursor:pointer;border:none;background:none}.hidden-card{display:none}</style>";
         html += "</head><body class='container py-4'>";
         html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>🎨 PandaDeck Dash</h2>";
-        html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>SO:</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select><input type='hidden' id='osInput' name='os' form='configForm'></div>";
+        html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>Teclado:</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Español</option></select></div>";
+        html += "<div class='d-flex align-items-center gap-2'><label>SO:</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select><input type='hidden' id='osInput' name='os' form='configForm'></div>";
         html += "<div class='d-flex align-items-center gap-2'><label>Cuadrícula:</label><select id='gridSelect' class='form-select form-select-sm' style='width:100px'><option value='2x2'>2x2</option><option value='3x2'>3x2</option><option value='3x3'>3x3</option><option value='4x3'>4x3</option><option value='5x3'>5x3</option></select><input type='hidden' id='rowsInput' name='rows' form='configForm'><input type='hidden' id='colsInput' name='cols' form='configForm'></div>";
         html += "<div class='d-flex align-items-center gap-2'><label>Fondo:</label><input type='color' id='globalBg' name='bg' form='configForm' class='form-control form-control-color' style='height:35px'></div></div></div>";
         
@@ -621,7 +811,7 @@ static void init_webserver() {
             html += "<div class='card p-2 text-center btn-card' id='card"+String(i)+"'>";
             html += "<b class='mb-2'>Botón " + String(i+1) + "</b>";
             html += "<input type='text' name='b"+String(i)+"l' class='form-control form-control-sm mb-1' placeholder='Nombre' maxlength='15'>";
-            html += "<input type='text' name='b"+String(i)+"v' class='form-control form-control-sm mb-1' placeholder='Comando' maxlength='127'>";
+            html += "<input type='text' name='b"+String(i)+"v' class='form-control form-control-sm mb-1' placeholder='Comando' maxlength='255'>";
             html += "<select name='b"+String(i)+"t' class='form-select form-select-sm mb-1'><option value='0'>App (Win+R)</option><option value='1'>Multimedia</option><option value='2'>Combo Ctrl</option></select>";
             html += "<div class='d-flex gap-1 align-items-center mb-1'>";
             html += "<input type='color' name='b"+String(i)+"c' class='form-control form-control-color flex-grow-1' style='height:30px' title='Color Fondo'>";
@@ -635,6 +825,13 @@ static void init_webserver() {
         html += "<div class='col-md-3'><div class='card p-3'><h5>Librería</h5>";
         html += "<input type='file' id='fileInput' class='form-control form-control-sm mb-2'><button onclick='upload()' class='btn btn-sm btn-success w-100 mb-3'>Subir</button>";
         html += "<ul id='fileList' class='list-group list-group-flush small'></ul></div>";
+        html += "</div>";
+        html += "<div class='card p-3 mt-3'><h5>Copia de Seguridad</h5>";
+        html += "<button onclick='backup()' class='btn btn-sm btn-info w-100 mb-2'>Descargar Backup</button>";
+        html += "<input type='file' id='restoreInput' class='form-control form-control-sm mb-2' accept='.json'>";
+        html += "<button onclick='restore()' class='btn btn-sm btn-danger w-100'>Restaurar Backup</button>";
+        html += "</div>";
+        
         html += "<div class='card p-3 mt-3'><h5>Firmware OTA</h5>";
         html += "<p class='small text-secondary'>Selecciona archivo .bin para actualizar el dispositivo.</p>";
         html += "<input type='file' id='otaInput' class='form-control form-control-sm mb-2' accept='.bin'>";
@@ -649,6 +846,10 @@ static void init_webserver() {
         html += " const fd = new FormData(); fd.append('os', e.target.value);";
         html += " await fetch('/api/save', {method:'POST', body:fd});";
         html += " load();"; // Reload the whole config for the new OS
+        html += "};";
+        html += "document.getElementById('langSelect').onchange = async (e) => {";
+        html += " const fd = new FormData(); fd.append('lang', e.target.value);";
+        html += " await fetch('/api/save', {method:'POST', body:fd});";
         html += "};";
         html += "document.getElementById('gridSelect').onchange = (e) => {";
         html += " const [c, r] = e.target.value.split('x').map(Number);";
@@ -673,6 +874,7 @@ static void init_webserver() {
         html += "  document.getElementById('colsInput').value = d.cols;";
         html += "  document.getElementById('osSelect').value = d.os;";
         html += "  document.getElementById('osInput').value = d.os;";
+        html += "  document.getElementById('langSelect').value = d.lang;";
         html += "  updateVisibleCards(d.rows, d.cols);";
         html += "  const selects = document.querySelectorAll('.asset-select');";
         html += "  selects.forEach(s => { s.innerHTML = '<option value=\"\">Sin Imagen</option>'; files.forEach(file => s.innerHTML += `<option value='${file.name}'>${file.name}</option>`); });";
@@ -696,6 +898,18 @@ static void init_webserver() {
         html += "};";
         html += "async function upload(){";
         html += " const fi = document.getElementById('fileInput'); if(!fi.files[0]) return; const fd = new FormData(); fd.append('file', fi.files[0]); await fetch('/api/upload', {method:'POST', body:fd}); load();";
+        html += "}";
+        html += "async function backup(){";
+        html += " const r = await fetch('/api/backup'); const d = await r.json();";
+        html += " const blob = new Blob([JSON.stringify(d, null, 2)], {type: 'application/json'});";
+        html += " const url = URL.createObjectURL(blob); const a = document.createElement('a');";
+        html += " a.href = url; a.download = 'pandadeck_backup.json'; a.click();";
+        html += "}";
+        html += "async function restore(){";
+        html += " const fi = document.getElementById('restoreInput'); if(!fi.files[0]) return; if(!confirm('¿Restaurar configuración? Se sobrescribirán todos los ajustes.')) return;";
+        html += " const reader = new FileReader(); reader.onload = async (e) => {";
+        html += "  await fetch('/api/restore', {method:'POST', body: e.target.result}); alert('Restauración completada!'); load();";
+        html += " }; reader.readAsText(fi.files[0]);";
         html += "}";
         html += "async function del(name){ if(!confirm('¿Borrar '+name+'?')) return; const fd = new FormData(); fd.append('filename', name); await fetch('/api/delete', {method:'POST', body:fd}); load(); }";
         html += "async function updateFirmware() {";
@@ -875,6 +1089,9 @@ static void create_settings_ui() {
     lv_obj_t *wifi_btn = lv_list_add_btn(list, "\xEF\x87\xAB", "WiFi Setup"); // WIFI
     lv_obj_add_event_cb(wifi_btn, settings_wifi_btn_cb, LV_EVENT_CLICKED, NULL);
 
+    lv_obj_t *lang_btn = lv_list_add_btn(list, "\xEF\x81\x92", "Keyboard Language (US/ES)"); // KEYBOARD
+    lv_obj_add_event_cb(lang_btn, settings_lang_btn_cb, LV_EVENT_CLICKED, NULL);
+
     int btn_count = g_rows * g_cols;
     for (int i = 0; i < btn_count; i++) {
         char buf[32];
@@ -1013,7 +1230,7 @@ static void create_edit_ui(uint8_t idx) {
         lv_obj_align(l3, LV_ALIGN_TOP_LEFT, 220, 105);
         g_edit_data.ta_value = lv_textarea_create(g_edit_screen);
         lv_textarea_set_one_line(g_edit_data.ta_value, true);
-        lv_textarea_set_max_length(g_edit_data.ta_value, 127);
+        lv_textarea_set_max_length(g_edit_data.ta_value, 255);
         lv_obj_set_size(g_edit_data.ta_value, 180, 40);
         lv_obj_align(g_edit_data.ta_value, LV_ALIGN_TOP_LEFT, 220, 125);
         lv_textarea_set_text(g_edit_data.ta_value, g_configs[idx].value);
@@ -1284,5 +1501,49 @@ static void settings_os_btn_cb(lv_event_t* e) {
     lv_label_set_text(lbl, "Cancel");
     lv_obj_add_event_cb(back, settings_btn_cb, LV_EVENT_CLICKED, NULL);
 }
+
+static void lang_select_cb(lv_event_t *e) {
+    lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
+    char buf[16];
+    const char * txt = lv_list_get_button_text(lv_obj_get_parent(obj), obj);
+    if(txt) strncpy(buf, txt, sizeof(buf));
+    else buf[0] = '\0';
+    
+    if (strcmp(buf, "English (US)") == 0) g_kb_lang = 0;
+    else if (strcmp(buf, "Español (ES)") == 0) g_kb_lang = 1;
+    
+    save_settings(false);
+    lv_scr_load(g_main_screen);
+    create_main_ui();
+}
+
+static void settings_lang_btn_cb(lv_event_t* e) {
+    lv_obj_t *screen = lv_obj_create(NULL);
+    lv_scr_load(screen);
+    lv_obj_set_style_bg_color(screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
+    
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Select Keyboard Language");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+    
+    lv_obj_t *list = lv_list_create(screen);
+    lv_obj_set_size(list, 400, 320);
+    lv_obj_align(list, LV_ALIGN_CENTER, 0, 0);
+    
+    const char* opts[] = {"English (US)", "Español (ES)"};
+    for(int i=0; i<2; i++) {
+        lv_obj_t *btn = lv_list_add_btn(list, "\xEF\x81\x92", opts[i]);
+        lv_obj_add_event_cb(btn, lang_select_cb, LV_EVENT_CLICKED, NULL);
+    }
+    
+    lv_obj_t *back = lv_btn_create(screen);
+    lv_obj_set_size(back, 120, 45);
+    lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -5);
+    lv_obj_t *lbl = lv_label_create(back);
+    lv_label_set_text(lbl, "Cancel");
+    lv_obj_add_event_cb(back, settings_btn_cb, LV_EVENT_CLICKED, NULL);
+}
+
 
 
