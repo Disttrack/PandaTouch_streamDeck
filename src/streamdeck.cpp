@@ -192,6 +192,7 @@ static void create_edit_ui(uint8_t idx);
 static void create_wifi_ui();
 static void load_settings();
 static void save_settings(bool saveButtons = true);
+static void show_update_screen();
 static void check_bluetooth_internal();
 static void check_wifi_internal();
 static void init_webserver(); // Start Asset & Config Server
@@ -416,6 +417,7 @@ void StreamDeckApp::setup() {
 
     // 4. Init OTA
     ArduinoOTA.onStart([]() {
+        show_update_screen();
         String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
         Serial.println("OTA: Start updating " + type);
     });
@@ -756,6 +758,7 @@ static void init_webserver() {
         }
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
         if(!index){
+            show_update_screen();
             Serial.printf("OTA: Web Update Start: %s\n", filename.c_str());
             if(!Update.begin(UPDATE_SIZE_UNKNOWN)){
                 Update.printError(Serial);
@@ -1547,3 +1550,32 @@ static void settings_lang_btn_cb(lv_event_t* e) {
 
 
 
+static void show_update_screen() {
+    lv_obj_clean(lv_scr_act());
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x1a1a1a), LV_PART_MAIN);
+
+    lv_obj_t *cont = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(cont, 300, 150);
+    lv_obj_center(cont);
+    lv_obj_set_style_bg_color(cont, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_border_color(cont, lv_color_hex(0xffaa00), LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont, 2, LV_PART_MAIN);
+
+    lv_obj_t *label = lv_label_create(cont);
+    if (g_kb_lang == 1) {
+        lv_label_set_text(label, "Actualizando firmware...\nPor favor, no apagues el dispositivo.");
+    } else {
+        lv_label_set_text(label, "Updating firmware...\nPlease do not turn off the device.");
+    }
+    lv_obj_set_style_text_color(label, lv_color_hex(0xffffff), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_center(label);
+
+    lv_obj_t *spinner = lv_spinner_create(cont);
+    lv_obj_set_size(spinner, 40, 40);
+    lv_obj_align(spinner, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0xffaa00), LV_PART_INDICATOR);
+    
+    // Force a render
+    lv_timer_handler();
+}
