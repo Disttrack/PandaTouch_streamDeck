@@ -446,6 +446,10 @@ static void save_settings(bool saveButtons) {
 // PUBLIC API IMPLEMENTATION
 // ==========================================
 void StreamDeckApp::setup() {
+    // CRITICAL: Initialize WiFi mode FIRST to set up TCP/IP stack
+    // This must happen before AsyncWebServer (global variable) tries to use it
+    WiFi.mode(WIFI_STA);
+    
     // 0. LittleFS
     if(!LittleFS.begin(true)){
         Serial.println("LittleFS Mount Failed");
@@ -525,6 +529,9 @@ void StreamDeckApp::loop() {
     }
     
     ArduinoOTA.handle();
+    
+    // Small delay to prevent watchdog timeout
+    delay(1);
 }
 
 void StreamDeckApp::handle_button(uint8_t idx) {

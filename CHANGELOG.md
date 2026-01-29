@@ -3,6 +3,12 @@
 Todas las mejoras y cambios realizados en esta versión mejorada.
 
 
+
+## [v1.3.4] - 2026-01-29
+### Correcciones Críticas
+- **Fix WiFi Crash**: Corregido crash en inicialización WiFi (TCP/IP stack) que causaba reinicios en instalaciones nuevas.
+- **Fix Watchdog Bootloop**: Añadido delay en el loop principal para prevenir reinicios por watchdog timer.
+
 ## [v1.3.2] - 2026-01-29
 ### Mejoras y Correcciones
 - **Factory Binary**: Generación automática de `factory.bin` en releases para instalaciones iniciales sin bootloop.
