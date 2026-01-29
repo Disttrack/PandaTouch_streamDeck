@@ -17,12 +17,19 @@ Transform your **BigTreeTech PandaTouch** into a powerful **native Bluetooth Str
 
 ## �️ Installation Guide
 
+### Introduction: Why Factory Binary?
+The original PandaTouch firmware uses a different partition layout than this project (required for OTA updates). Because of this, simply flashing the application (`firmware.bin`) **will not work** for the first installation and will cause a boot loop (restart cycle).
+
+**You must perform a full flash once.**
+
 ### Option A: Easy Flashing (No-Code)
 The fastest way for non-developers. You only need a Chrome-based browser:
-1. Download the latest `firmware.bin` from the releases page.
-2. Go to [ESP Web Tools](https://web.esphome.io/) or [Adafruit Web Serial ESPTool](https://adafruit.github.io/Adafruit_WebSerial_ESPTool/).
+1. Download the latest `factory.bin` (not firmware.bin) from the releases page. This file contains the bootloader, partitions, and app all in one.
+2. Go to [ESP Web Tools](https://web.esphome.io/).
 3. Connect your PandaTouch via USB-C and click **Connect**.
-4. Select the `.bin` file and flash it.
+4. Click **Install** and select the `.bin` file.
+   - **Important**: If asked for an offset/address, you MUST use `0x0` (zero).
+5. Wait for the process to finish. Your device will reboot with the new system.
 
 ### Option B: Advanced (PlatformIO)
 Recommended if you want to modify the code:
@@ -46,8 +53,11 @@ Once you have this firmware installed, you don't need cables for future versions
 
 1. Access the **Web Dashboard** by entering the device's IP address in your browser.
 2. In the right sidebar, find the **"Firmware OTA"** section.
-3. Select the generated or downloaded `.bin` file.
+3. Select the `firmware.bin` file (not `factory.bin`) from the releases page.
 4. Click **"Update"**. You will see a message on the device screen indicating progress. Do not turn it off until it reboots.
+
+> [!NOTE]
+> For OTA updates, always use `firmware.bin`. The `factory.bin` is only needed for the initial installation via USB.
 
 ---
 

@@ -42,6 +42,26 @@ jobs:
       - name: Build Firmware
         run: pio run
 
+      - name: Generate Factory Binary
+        run: |
+          # Find boot_app0.bin
+          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -n 1)
+          echo "Found boot_app0 at: $BOOT_APP0"
+          
+          # Find esptool.py
+          ESPTOOL=$(find ~/.platformio/packages/tool-esptoolpy -name esptool.py | head -n 1)
+          echo "Found esptool at: $ESPTOOL"
+
+          python $ESPTOOL --chip esp32s3 merge_bin \
+            -o factory.bin \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 8MB \
+            0x0 .pio/build/pandatouch/bootloader.bin \
+            0x8000 .pio/build/pandatouch/partitions.bin \
+            0xe000 $BOOT_APP0 \
+            0x10000 .pio/build/pandatouch/firmware.bin
+
       - name: Extract Release Notes
         id: changelog_reader
         uses: mindsers/changelog-reader-action@v2
@@ -54,7 +74,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: .pio/build/pandatouch/firmware.bin
+          files: |
+            .pio/build/pandatouch/firmware.bin
+            factory.bin
           body: ${{ steps.changelog_reader.outputs.changes }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
