@@ -19,7 +19,7 @@ Transform your **BigTreeTech PandaTouch** into a powerful **native Bluetooth Str
 
 ### Option A: Easy Flashing (No-Code)
 The fastest way for non-developers. You only need a Chrome-based browser:
-1. Download the latest `firmware_merged.bin` from the releases page (coming soon).
+1. Download the latest `firmware.bin` from the releases page.
 2. Go to [ESP Web Tools](https://web.esphome.io/) or [Adafruit Web Serial ESPTool](https://adafruit.github.io/Adafruit_WebSerial_ESPTool/).
 3. Connect your PandaTouch via USB-C and click **Connect**.
 4. Select the `.bin` file and flash it.

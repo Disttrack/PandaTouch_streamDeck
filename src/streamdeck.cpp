@@ -62,11 +62,21 @@ static bool g_editing_bg = false;
 static lv_obj_t *g_slider_r, *g_slider_g, *g_slider_b;
 static lv_obj_t *g_preview;
 static volatile bool g_pending_ui_update = false;
+static lv_obj_t* g_update_screen = nullptr;
+static lv_obj_t* g_update_bar = nullptr;
+static lv_obj_t* g_update_label = nullptr;
+static lv_obj_t* g_update_pct_label = nullptr;
+static volatile int g_ota_pct = -2; // -2: Idle, -1: Indeterminate, 0-100: Progress
+static String g_ota_msg = "";
+
+// Forward Declarations
+static void show_update_screen();
+static void update_ota_progress(int pct, const char* msg);
 
 // ==========================================
 // SYMBOL MAPPING
 // ==========================================
-static const char* g_sym_names[] = {"None", "OK", "Close", "Copy", "Paste", "Cut", "Play", "Pause", "Mute", "Settings", "Home", "Save", "Edit", "File", "Dir", "Plus"};
+static const char* g_sym_names[] = {"None", "OK", "Close", "Copy", "Paste", "Cut", "Play", "Pause", "PlayPause", "Mute", "Settings", "Home", "Save", "Edit", "File", "Dir", "Plus", "Prev", "Next", "Stop"};
 static const char* g_sym_codes[] = {
     "", 
     "\xEF\x80\x8C", // OK
@@ -76,6 +86,7 @@ static const char* g_sym_codes[] = {
     "\xEF\x83\x84", // CUT
     "\xEF\x81\x8B", // PLAY
     "\xEF\x81\x8C", // PAUSE
+    "\xEF\x81\x8B\xEF\x81\x8C", // PLAYPAUSE
     "\xEF\x80\xA6", // MUTE
     "\xEF\x80\x93", // SETTINGS
     "\xEF\x80\x95", // HOME
@@ -83,17 +94,20 @@ static const char* g_sym_codes[] = {
     "\xEF\x8C\x84", // EDIT
     "\xEF\x85\x9B", // FILE
     "\xEF\x81\xBB", // DIR
-    "\xEF\x81\xA7"  // PLUS
+    "\xEF\x81\xA7",  // PLUS
+    "\xEF\x81\x88", // PREV
+    "\xEF\x81\x91", // NEXT
+    "\xEF\x81\x8D"  // STOP
 };
 
 static const char* get_symbol_by_index(int idx) {
-    if(idx < 0 || idx >= 16) return "";
+    if(idx < 0 || idx >= 20) return "";
     return g_sym_codes[idx];
 }
 
 static int get_index_by_symbol(const char* sym) {
     if(!sym || sym[0] == '\0') return 0;
-    for(int i=1; i<16; i++) {
+    for(int i=1; i<20; i++) {
         if(strcmp(sym, g_sym_codes[i]) == 0) return i;
     }
     return 0;
@@ -181,6 +195,65 @@ static void bleWrite(char c) {
                 break;
         }
     }
+}
+
+static void execute_advanced_shortcut(const char* value) {
+    if (!value || value[0] == '\0') return;
+    
+    String val = String(value);
+    val.toUpperCase();
+    
+    // We use a simple approach: split by '+'
+    int lastPos = 0;
+    while (lastPos < val.length()) {
+        int plusPos = val.indexOf('+', lastPos);
+        String part = (plusPos == -1) ? val.substring(lastPos) : val.substring(lastPos, plusPos);
+        part.trim();
+        
+        if (part == "CTRL") bleKeyboard.press(KEY_LEFT_CTRL);
+        else if (part == "SHIFT") bleKeyboard.press(KEY_LEFT_SHIFT);
+        else if (part == "ALT") bleKeyboard.press(KEY_LEFT_ALT);
+        else if (part == "GUI" || part == "WIN" || part == "CMD") bleKeyboard.press(KEY_LEFT_GUI);
+        else if (part == "ENTER" || part == "RETURN") bleKeyboard.press(KEY_RETURN);
+        else if (part == "TAB") bleKeyboard.press(KEY_TAB);
+        else if (part == "ESC") bleKeyboard.press(KEY_ESC);
+        else if (part == "BACKSPACE") bleKeyboard.press(KEY_BACKSPACE);
+        else if (part == "DEL" || part == "DELETE") bleKeyboard.press(KEY_DELETE);
+        else if (part == "UP") bleKeyboard.press(KEY_UP_ARROW);
+        else if (part == "DOWN") bleKeyboard.press(KEY_DOWN_ARROW);
+        else if (part == "LEFT") bleKeyboard.press(KEY_LEFT_ARROW);
+        else if (part == "RIGHT") bleKeyboard.press(KEY_RIGHT_ARROW);
+        else if (part == "SPACE") bleKeyboard.press(' ');
+        else if (part.startsWith("F") && part.length() > 1) {
+            int fNum = part.substring(1).toInt();
+            if (fNum >= 1 && fNum <= 12) bleKeyboard.press(0x40 + 0xBF + fNum); // KEY_F1 is 0xC2 in BleKeyboard (wait, let's use the actual KEY_F1 if available)
+            // BleKeyboard.h: #define KEY_F1 0xC2
+            // Actually it's easier to use a switch or direct defines if known.
+            if (fNum == 1) bleKeyboard.press(KEY_F1);
+            else if (fNum == 2) bleKeyboard.press(KEY_F2);
+            else if (fNum == 3) bleKeyboard.press(KEY_F3);
+            else if (fNum == 4) bleKeyboard.press(KEY_F4);
+            else if (fNum == 5) bleKeyboard.press(KEY_F5);
+            else if (fNum == 6) bleKeyboard.press(KEY_F6);
+            else if (fNum == 7) bleKeyboard.press(KEY_F7);
+            else if (fNum == 8) bleKeyboard.press(KEY_F8);
+            else if (fNum == 9) bleKeyboard.press(KEY_F9);
+            else if (fNum == 10) bleKeyboard.press(KEY_F10);
+            else if (fNum == 11) bleKeyboard.press(KEY_F11);
+            else if (fNum == 12) bleKeyboard.press(KEY_F12);
+        }
+        else if (part.length() == 1) {
+            char c = part[0];
+            if (c >= 'A' && c <= 'Z') c += 32; // Convert to lowercase to avoid implicit Shift
+            bleKeyboard.press(c);
+        }
+        
+        if (plusPos == -1) break;
+        lastPos = plusPos + 1;
+    }
+    
+    delay(100);
+    bleKeyboard.releaseAll();
 }
 
 // ==========================================
@@ -417,13 +490,18 @@ void StreamDeckApp::setup() {
 
     // 4. Init OTA
     ArduinoOTA.onStart([]() {
-        show_update_screen();
+        show_update_screen(); // Show screen immediately
         String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
         Serial.println("OTA: Start updating " + type);
     });
-    ArduinoOTA.onEnd([]() { Serial.println("\nOTA: Update Complete"); });
+    ArduinoOTA.onEnd([]() { 
+        update_ota_progress(100, "Update Complete!");
+        Serial.println("\nOTA: Update Complete"); 
+    });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+        int pct = (progress / (total / 100));
+        Serial.printf("OTA Progress: %d%%\r", pct);
+        update_ota_progress(pct, (g_kb_lang == 1 ? "Actualizando sistema..." : "Updating System..."));
     });
     ArduinoOTA.onError([](ota_error_t error) {
         Serial.printf("OTA Error[%u]: ", error);
@@ -488,6 +566,9 @@ void StreamDeckApp::handle_button(uint8_t idx) {
         else if (strcmp(cfg.value, "volup") == 0) bleKeyboard.write(KEY_MEDIA_VOLUME_UP);
         else if (strcmp(cfg.value, "voldown") == 0) bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);
         else if (strcmp(cfg.value, "play") == 0) bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+        else if (strcmp(cfg.value, "next") == 0) bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
+        else if (strcmp(cfg.value, "prev") == 0) bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
+        else if (strcmp(cfg.value, "stop") == 0) bleKeyboard.write(KEY_MEDIA_STOP);
     }
     else if (cfg.type == 2) { // Key Combo (Ctrl+X or Cmd+X)
         if (g_target_os == 0) bleKeyboard.press(KEY_LEFT_CTRL); // Windows
@@ -496,6 +577,9 @@ void StreamDeckApp::handle_button(uint8_t idx) {
         bleKeyboard.press(cfg.value[0]);
         delay(100);
         bleKeyboard.releaseAll();
+    }
+    else if (cfg.type == 3) { // Advanced Combo (CTRL+SHIFT+S)
+        execute_advanced_shortcut(cfg.value);
     }
 }
 
@@ -543,7 +627,7 @@ static void init_webserver() {
 
         auto find_name = [&](const char* code) -> String {
             if (!code || code[0] == '\0') return "None";
-            for(int j=0; j<16; j++) {
+            for(int j=0; j<20; j++) {
                 if(strcmp(code, g_sym_codes[j]) == 0) return g_sym_names[j];
             }
             return "None";
@@ -585,7 +669,7 @@ static void init_webserver() {
             
             if(request->hasParam(p + "icon", true)) {
                 String iconName = request->getParam(p + "icon", true)->value();
-                for(int j=0; j<16; j++) {
+                for(int j=0; j<20; j++) {
                     if(iconName == g_sym_names[j]) {
                         strncpy(g_configs[i].icon, g_sym_codes[j], 7);
                         break;
@@ -678,14 +762,19 @@ static void init_webserver() {
                 if(hex.startsWith("#")) hex = hex.substring(1);
                 return strtol(hex.c_str(), NULL, 16);
             };
-
-            if(doc.containsKey("bg")) g_bg_color = parse_color(doc["bg"]);
-            if(doc.containsKey("rows")) g_rows = doc["rows"];
-            if(doc.containsKey("cols")) g_cols = doc["cols"];
-            if(doc.containsKey("os")) g_target_os = doc["os"];
-            if(doc.containsKey("lang")) g_kb_lang = doc["lang"];
-            if(doc.containsKey("wifi_ssid")) strncpy(g_wifi_ssid, doc["wifi_ssid"], 31);
-
+        if(error){
+            Serial.println("JSON Parse Error");
+            request->send(400);
+            return;
+        }
+        
+        if(!doc["bg"].isNull()) g_bg_color = parse_color(doc["bg"]);
+        if(!doc["rows"].isNull()) g_rows = doc["rows"];
+        if(!doc["cols"].isNull()) g_cols = doc["cols"];
+        if(!doc["os"].isNull()) g_target_os = doc["os"];
+        if(!doc["lang"].isNull()) g_kb_lang = doc["lang"];
+        if(!doc["wifi_ssid"].isNull()) strncpy(g_wifi_ssid, doc["wifi_ssid"], 31);
+        if(!doc["wifi_pass"].isNull()) strncpy(g_wifi_pass, doc["wifi_pass"], 63);
             auto restore_btns = [&](JsonArray arr, const char* path) {
                 ButtonConfig btns[20];
                 memset(btns, 0, sizeof(btns));
@@ -701,9 +790,9 @@ static void init_webserver() {
                 File f = LittleFS.open(path, "w");
                 if (f) { f.write((uint8_t*)btns, sizeof(btns)); f.close(); }
             };
-
-            if(doc.containsKey("win_btns")) restore_btns(doc["win_btns"].as<JsonArray>(), "/win_btns.bin");
-            if(doc.containsKey("mac_btns")) restore_btns(doc["mac_btns"].as<JsonArray>(), "/mac_btns.bin");
+         // Check for specific button array updates
+        if(!doc["win_btns"].isNull()) restore_btns(doc["win_btns"].as<JsonArray>(), "/win_btns.bin");
+        if(!doc["mac_btns"].isNull()) restore_btns(doc["mac_btns"].as<JsonArray>(), "/mac_btns.bin");
 
             save_settings(false); // Save globals
             load_settings();     // Reload current active buttons
@@ -720,10 +809,14 @@ static void init_webserver() {
             File file = root.openNextFile();
             bool first = true;
             while(file){
-                if(!first) json += ",";
-                json += "{\"name\":\"" + String(file.name()) + "\",\"size\":" + String(file.size()) + "}";
+                String name = String(file.name());
+                // Hide system config files
+                if (name != "win_btns.bin" && name != "mac_btns.bin") {
+                    if(!first) json += ",";
+                    json += "{\"name\":\"" + name + "\",\"size\":" + String(file.size()) + "}";
+                    first = false;
+                }
                 file = root.openNextFile();
-                first = false;
             }
         }
         json += "]";
@@ -735,6 +828,13 @@ static void init_webserver() {
         if(request->hasParam("filename", true)) {
             String fname = request->getParam("filename", true)->value();
             if(!fname.startsWith("/")) fname = "/" + fname;
+            
+            // Protect system config files
+            if (fname == "/win_btns.bin" || fname == "/mac_btns.bin") {
+                request->send(403, "text/plain", "Forbidden: System File");
+                return;
+            }
+
             if(LittleFS.remove(fname)) {
                 Serial.printf("API: Deleted %s\n", fname.c_str());
                 request->send(200, "text/plain", "OK");
@@ -758,7 +858,8 @@ static void init_webserver() {
         }
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
         if(!index){
-            show_update_screen();
+            show_update_screen(); // Ensure screen is shown
+            update_ota_progress(0, (g_kb_lang == 1 ? "Actualizando firmware..." : "Updating firmware..."));
             Serial.printf("OTA: Web Update Start: %s\n", filename.c_str());
             if(!Update.begin(UPDATE_SIZE_UNKNOWN)){
                 Update.printError(Serial);
@@ -768,9 +869,12 @@ static void init_webserver() {
             if(Update.write(data, len) != len){
                 Update.printError(Serial);
             }
+            // Update UI directly
+            update_ota_progress(-1, (g_kb_lang == 1 ? "Recibiendo firmware..." : "Receiving firmware..."));
         }
         if(final){
             if(Update.end(true)){
+                update_ota_progress(100, (g_kb_lang == 1 ? "¡Completado! Reiniciando..." : "Done! Restarting..."));
                 Serial.printf("OTA: Web Update Success: %u bytes\n", index+len);
             } else {
                 Update.printError(Serial);
@@ -798,9 +902,10 @@ static void init_webserver() {
 
     // Web Dashboard (UTF-8 Header)
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        String html = "<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>PandaTouch Dash</title>";
+        String html = "<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>PandaDeck Dash</title>";
         html += "<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>";
-        html += "<style>body{background:#121212;color:white}.card{background:#1e1e1e;border:1px solid #333;color:white;margin-bottom:15px}.btn-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:15px}.btn-del{padding:0 5px;color:#ff4444;cursor:pointer;border:none;background:none}.hidden-card{display:none}</style>";
+        html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css'>";
+        html += "<style>body{background:#121212;color:white}.card{background:#1e1e1e;border:1px solid #333;color:white;margin-bottom:15px}.btn-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:15px}.btn-del{padding:0 5px;color:#ff4444;cursor:pointer;border:none;background:none}.hidden-card{display:none} .icon-select{font-family: 'Font Awesome 6 Free', 'FontAwesome', sans-serif; font-weight: 900;} .combo-builder{background:#2a2a2a; border-radius:4px; padding:5px; margin-top:5px; border:1px solid #444;}</style>";
         html += "</head><body class='container py-4'>";
         html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>🎨 PandaDeck Dash</h2>";
         html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>Teclado:</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Español</option></select></div>";
@@ -814,11 +919,23 @@ static void init_webserver() {
             html += "<div class='card p-2 text-center btn-card' id='card"+String(i)+"'>";
             html += "<b class='mb-2'>Botón " + String(i+1) + "</b>";
             html += "<input type='text' name='b"+String(i)+"l' class='form-control form-control-sm mb-1' placeholder='Nombre' maxlength='15'>";
-            html += "<input type='text' name='b"+String(i)+"v' class='form-control form-control-sm mb-1' placeholder='Comando' maxlength='255'>";
-            html += "<select name='b"+String(i)+"t' class='form-select form-select-sm mb-1'><option value='0'>App (Win+R)</option><option value='1'>Multimedia</option><option value='2'>Combo Ctrl</option></select>";
-            html += "<div class='d-flex gap-1 align-items-center mb-1'>";
+            html += "<input type='text' name='b"+String(i)+"v' id='val"+String(i)+"' class='form-control form-control-sm mb-1 text-uppercase' placeholder='Comando' maxlength='255'>";
+            html += "<select name='b"+String(i)+"t' id='type"+String(i)+"' class='form-select form-select-sm mb-1' onchange='toggleBuilder("+String(i)+")'><option value='0'>App (Win+R)</option><option value='1'>Multimedia</option><option value='2'>Combo Básico</option><option value='3'>Combo Avanzado</option></select>";
+            
+            // Combo Builder (Hidden by default)
+            html += "<div id='builder"+String(i)+"' class='combo-builder d-none'>";
+            html += "<div class='d-flex flex-wrap justify-content-center gap-1 mb-1'>";
+            html += "<input type='checkbox' class='btn-check' id='c"+String(i)+"' onchange='updC("+String(i)+")'><label class='btn btn-outline-info btn-xs py-0 px-1' style='font-size:10px' for='c"+String(i)+"'>CTRL</label>";
+            html += "<input type='checkbox' class='btn-check' id='s"+String(i)+"' onchange='updC("+String(i)+")'><label class='btn btn-outline-info btn-xs py-0 px-1' style='font-size:10px' for='s"+String(i)+"'>SHFT</label>";
+            html += "<input type='checkbox' class='btn-check' id='a"+String(i)+"' onchange='updC("+String(i)+")'><label class='btn btn-outline-info btn-xs py-0 px-1' style='font-size:10px' for='a"+String(i)+"'>ALT</label>";
+            html += "<input type='checkbox' class='btn-check' id='m"+String(i)+"' onchange='updC("+String(i)+")'><label class='btn btn-outline-info btn-xs py-0 px-1' style='font-size:10px' for='m"+String(i)+"'>META</label>";
+            html += "</div>";
+            html += "<select id='key"+String(i)+"' class='form-select form-select-sm' style='font-size:11px' onchange='updC("+String(i)+")'></select>";
+            html += "</div>";
+
+            html += "<div class='d-flex gap-1 align-items-center mb-1 mt-1'>";
             html += "<input type='color' name='b"+String(i)+"c' class='form-control form-control-color flex-grow-1' style='height:30px' title='Color Fondo'>";
-            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm' title='Icono'></select>";
+            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm icon-select' title='Icono'></select>";
             html += "</div>";
             html += "<select name='b"+String(i)+"i' class='form-select form-select-sm asset-select' title='Imagen Custom'></select>";
             html += "</div>";
@@ -843,7 +960,16 @@ static void init_webserver() {
         html += "</div></div></div>";
         
         html += "<script>";
-        html += "const SYMBOLS = ['None','OK','Close','Copy','Paste','Cut','Play','Pause','Mute','Settings','Home','Save','Edit','File','Dir','Plus'];";
+        html += "const SYMBOLS = {";
+        for(int j=0; j<20; j++) {
+            html += "'" + String(g_sym_names[j]) + "': '" + String(g_sym_codes[j]) + "'";
+            if(j < 19) html += ",";
+        }
+        html += "};";
+        html += "const KEYS = ['','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','ENTER','TAB','ESC','BACKSPACE','DEL','SPACE','UP','DOWN','LEFT','RIGHT','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];";
+        html += "function toggleBuilder(i){ const t=document.getElementById('type'+i).value; document.getElementById('builder'+i).classList.toggle('d-none', t!='3'); if(t=='3') updC(i); }";
+        html += "function updC(i){ let c=''; if(document.getElementById('c'+i).checked) c+='CTRL+'; if(document.getElementById('s'+i).checked) c+='SHIFT+'; if(document.getElementById('a'+i).checked) c+='ALT+'; if(document.getElementById('m'+i).checked) c+='GUI+'; const k=document.getElementById('key'+i).value; if(k) c+=k; else if(c.endsWith('+')) c=c.slice(0,-1);  document.getElementById('val'+i).value = c; }";
+        html += "function parseC(i,v){ if(!v)return; const p=v.toUpperCase().split('+'); document.getElementById('c'+i).checked=p.includes('CTRL'); document.getElementById('s'+i).checked=p.includes('SHIFT'); document.getElementById('a'+i).checked=p.includes('ALT'); document.getElementById('m'+i).checked=p.includes('GUI')||p.includes('WIN')||p.includes('CMD'); const k=p.find(x=>!['CTRL','SHIFT','ALT','GUI','WIN','CMD'].includes(x))||''; document.getElementById('key'+i).value=k; }";
         html += "document.getElementById('osSelect').onchange = async (e) => {";
         html += " document.getElementById('osInput').value = e.target.value;";
         html += " const fd = new FormData(); fd.append('os', e.target.value);";
@@ -881,6 +1007,7 @@ static void init_webserver() {
         html += "  updateVisibleCards(d.rows, d.cols);";
         html += "  const selects = document.querySelectorAll('.asset-select');";
         html += "  selects.forEach(s => { s.innerHTML = '<option value=\"\">Sin Imagen</option>'; files.forEach(file => s.innerHTML += `<option value='${file.name}'>${file.name}</option>`); });";
+        html += "  for(let i=0; i<20; i++){ const s=document.getElementById('key'+i); s.innerHTML = KEYS.map(k=>`<option value='${k}'>${k || '- Tecla -'}</option>`).join(''); }";
         html += "  d.buttons.forEach((b,i) => { ";
         html += "   const lbl = document.getElementsByName(`b${i}l`)[0]; if(!lbl) return;";
         html += "   lbl.value = b.label;";
@@ -888,9 +1015,10 @@ static void init_webserver() {
         html += "   document.getElementsByName(`b${i}t`)[0].value = b.type;";
         html += "   document.getElementsByName(`b${i}c`)[0].value = '#' + b.color.padStart(6,'0');";
         html += "   const sIcon = document.getElementsByName(`b${i}icon`)[0];";
-        html += "   sIcon.innerHTML = SYMBOLS.map(s => `<option value='${s}'>${s}</option>`).join('');";
+        html += "   sIcon.innerHTML = Object.entries(SYMBOLS).map(([name, char]) => `<option value='${name}'>${char ? char + ' ' : ''}${name}</option>`).join('');";
         html += "   sIcon.value = b.icon || 'None';";
         html += "   document.getElementsByName(`b${i}i`)[0].value = b.img.startsWith('/') ? b.img.substring(1) : b.img;";
+        html += "   parseC(i, b.value); toggleBuilder(i);";
         html += "  });";
         html += "  const fl = document.getElementById('fileList'); fl.innerHTML = '';";
         html += "  files.forEach(file => fl.innerHTML += `<li class='list-group-item bg-dark text-white d-flex justify-content-between align-items-center px-2' style='border-color:#333'>${file.name} <button onclick=\"del('${file.name}')\" class='btn-del'>×</button></li>`);";
@@ -1213,7 +1341,15 @@ static void create_edit_ui(uint8_t idx) {
         lv_obj_align(li, LV_ALIGN_TOP_LEFT, 220, 35);
         g_edit_data.dd_icon = lv_dropdown_create(g_edit_screen);
         lv_obj_set_size(g_edit_data.dd_icon, 180, 40);
-        lv_dropdown_set_options(g_edit_data.dd_icon, "None\nOK\nClose\nCopy\nPaste\nCut\nPlay\nPause\nMute\nLoop\nPlus\nSave\nEdit\nFile\nDir\nWarning");
+        
+        String dd_opts = "";
+        for(int j=0; j<20; j++) {
+            if(j > 0) dd_opts += "\n";
+            if(strlen(g_sym_codes[j]) > 0) dd_opts += String(g_sym_codes[j]) + " " + String(g_sym_names[j]);
+            else dd_opts += String(g_sym_names[j]);
+        }
+        lv_dropdown_set_options(g_edit_data.dd_icon, dd_opts.c_str());
+        
         lv_obj_align(g_edit_data.dd_icon, LV_ALIGN_TOP_LEFT, 220, 55);
         lv_dropdown_set_selected(g_edit_data.dd_icon, get_index_by_symbol(g_configs[idx].icon));
 
@@ -1223,7 +1359,7 @@ static void create_edit_ui(uint8_t idx) {
         lv_obj_align(l2, LV_ALIGN_TOP_LEFT, 20, 105);
         g_edit_data.dd_type = lv_dropdown_create(g_edit_screen);
         lv_obj_set_size(g_edit_data.dd_type, 180, 40);
-        lv_dropdown_set_options(g_edit_data.dd_type, "Launch App\nMedia Key\nKey Ctrl+");
+        lv_dropdown_set_options(g_edit_data.dd_type, "Launch App\nMedia Key\nCombo Basic\nCombo Advanced");
         lv_obj_align(g_edit_data.dd_type, LV_ALIGN_TOP_LEFT, 20, 125);
         lv_dropdown_set_selected(g_edit_data.dd_type, g_configs[idx].type);
 
@@ -1550,32 +1686,66 @@ static void settings_lang_btn_cb(lv_event_t* e) {
 
 
 
-static void show_update_screen() {
-    lv_obj_clean(lv_scr_act());
-    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x1a1a1a), LV_PART_MAIN);
+static void update_ota_progress(int pct, const char* msg) {
+    if (!g_update_screen) return;
+    
+    if (msg && g_update_label) {
+        lv_label_set_text(g_update_label, msg);
+    }
+    
+    if (g_update_bar) {
+        if (pct >= 0) {
+            lv_bar_set_value(g_update_bar, pct, LV_ANIM_ON);
+            if (g_update_pct_label) {
+                lv_label_set_text_fmt(g_update_pct_label, "%d%%", pct);
+            }
+        }
+    }
+    
+    lv_timer_handler(); // Force update during long loops
+}
 
-    lv_obj_t *cont = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(cont, 300, 150);
+static void show_update_screen() {
+    if (g_update_screen) {
+        lv_scr_load(g_update_screen);
+        return;
+    }
+
+    g_update_screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(g_update_screen, lv_color_hex(0x1a1a1a), LV_PART_MAIN);
+
+    lv_obj_t *cont = lv_obj_create(g_update_screen);
+    lv_obj_set_size(cont, 400, 220); // Larger to avoid overlap
     lv_obj_center(cont);
-    lv_obj_set_style_bg_color(cont, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(cont, lv_color_hex(0x2a2a2a), LV_PART_MAIN);
     lv_obj_set_style_border_color(cont, lv_color_hex(0xffaa00), LV_PART_MAIN);
     lv_obj_set_style_border_width(cont, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(cont, 10, LV_PART_MAIN);
 
-    lv_obj_t *label = lv_label_create(cont);
-    if (g_kb_lang == 1) {
-        lv_label_set_text(label, "Actualizando firmware...\nPor favor, no apagues el dispositivo.");
-    } else {
-        lv_label_set_text(label, "Updating firmware...\nPlease do not turn off the device.");
-    }
-    lv_obj_set_style_text_color(label, lv_color_hex(0xffffff), LV_PART_MAIN);
-    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_center(label);
+    g_update_label = lv_label_create(cont);
+    lv_label_set_text(g_update_label, (g_kb_lang == 1 ? "Actualizando firmware..." : "Updating firmware..."));
+    lv_obj_set_style_text_color(g_update_label, lv_color_hex(0xffffff), LV_PART_MAIN);
+    lv_obj_set_style_text_align(g_update_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_align(g_update_label, LV_ALIGN_TOP_MID, 0, 20);
+
+    g_update_bar = lv_bar_create(cont);
+    lv_obj_set_size(g_update_bar, 300, 20);
+    lv_obj_align(g_update_bar, LV_ALIGN_CENTER, 0, 10);
+    lv_bar_set_range(g_update_bar, 0, 100);
+    lv_bar_set_value(g_update_bar, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(g_update_bar, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(g_update_bar, lv_color_hex(0xffaa00), LV_PART_INDICATOR);
+
+    g_update_pct_label = lv_label_create(cont);
+    lv_label_set_text(g_update_pct_label, "0%");
+    lv_obj_set_style_text_font(g_update_pct_label, &lv_font_montserrat_14, 0);
+    lv_obj_align(g_update_pct_label, LV_ALIGN_CENTER, 0, 35);
 
     lv_obj_t *spinner = lv_spinner_create(cont);
-    lv_obj_set_size(spinner, 40, 40);
+    lv_obj_set_size(spinner, 30, 30);
     lv_obj_align(spinner, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_set_style_arc_color(spinner, lv_color_hex(0xffaa00), LV_PART_INDICATOR);
     
-    // Force a render
+    lv_scr_load(g_update_screen);
     lv_timer_handler();
 }
