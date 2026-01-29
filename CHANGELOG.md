@@ -2,7 +2,7 @@
 
 Todas las mejoras y cambios realizados en esta versión mejorada.
 
-## [v1.3.0] - 2026-01-29
+## [v1.3.1] - 2026-01-29
 ### Nuevas Funcionalidades
 - **Actualización OTA Mejorada**: Nueva interfaz de actualización persistente en el dispositivo que elimina parpadeos, muestra una barra de progreso real y evita solapamiento de textos.
 - **Atajos Avanzados (Combos)**: Soporte completo para combinaciones `CTRL+SHIFT+ALT+Tecla`.
