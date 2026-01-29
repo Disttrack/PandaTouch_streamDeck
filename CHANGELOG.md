@@ -2,6 +2,14 @@
 
 Todas las mejoras y cambios realizados en esta versión mejorada.
 
+
+## [v1.3.2] - 2026-01-29
+### Mejoras y Correcciones
+- **Factory Binary**: Generación automática de `factory.bin` en releases para instalaciones iniciales sin bootloop.
+- **Tabla de Particiones**: Nueva `partitions_custom.csv` optimizada para OTA con 3MB por app.
+- **Documentación**: README actualizado con instrucciones claras sobre cuándo usar `factory.bin` vs `firmware.bin`.
+- **CI/CD**: GitHub Actions ahora genera y publica automáticamente ambos binarios.
+
 ## [v1.3.1] - 2026-01-29
 ### Nuevas Funcionalidades
 - **Actualización OTA Mejorada**: Nueva interfaz de actualización persistente en el dispositivo que elimina parpadeos, muestra una barra de progreso real y evita solapamiento de textos.
