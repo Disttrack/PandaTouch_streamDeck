@@ -2,7 +2,7 @@
 
 Todas las mejoras y cambios realizados en esta versión mejorada.
 
-## [1.3.0] - 2026-01-29
+## [v1.3.0] - 2026-01-29
 ### Nuevas Funcionalidades
 - **Actualización OTA Mejorada**: Nueva interfaz de actualización persistente en el dispositivo que elimina parpadeos, muestra una barra de progreso real y evita solapamiento de textos.
 - **Atajos Avanzados (Combos)**: Soporte completo para combinaciones `CTRL+SHIFT+ALT+Tecla`.
@@ -16,7 +16,7 @@ Todas las mejoras y cambios realizados en esta versión mejorada.
 - **Icono PlayPause**: Nuevo icono combinado ▶⏸.
 - **CI/CD**: Generación automática de notas de release en GitHub a partir de este archivo Changelog.
 
-## [1.2.0] - 2026-01-27
+## [v1.2.0] - 2026-01-27
 ### Añadido
 - **Actualización Web OTA**: Nueva interfaz en el panel de control para subir archivos `.bin` y actualizar el firmware sin cables.
 - **Soporte macOS**: Mapeo automático de la tecla Cmd y lanzador Spotlight (`Cmd+Space`).
