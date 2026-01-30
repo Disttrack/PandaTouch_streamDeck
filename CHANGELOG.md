@@ -1,52 +1,61 @@
 # Changelog - PandaTouch StreamDeck (Fork)
 
-Todas las mejoras y cambios realizados en esta versión mejorada.
+All improvements and changes made in this enhanced version.
 
+## [v1.4.0] - 2026-01-30
+### New Features
+- **Multi-language Support (EN/ES)**: Full localization system for both the web dashboard and the on-device display. Toggle between English and Spanish seamlessly.
+- **Unified Backup & Restore**: The backup system now includes all custom images from LittleFS as Base64 encoded strings within a single JSON file. One-click solution to restore your entire setup, including graphics.
+- **Improved Web Dashboard**: Added descriptive labels for "Basic Combo" and localized all interface elements, including icon names and tooltips.
 
+### Improvements & Fixes
+- **UI Clarification**: Renamed "Combo Básico" and added helpful hints in the web UI for better user guidance.
+- **Standardized UI**: Improved consistency of button sizes and labels across different languages on the device screen.
+- **Localized OTA Updates**: Firmware update progress messages are now shown in the user's selected language.
 
 ## [v1.3.3] - 2026-01-29
-### Correcciones Críticas
-- **Fix WiFi Crash**: Corregido crash en inicialización WiFi (TCP/IP stack) que causaba reinicios en instalaciones nuevas.
-- **Fix Watchdog Bootloop**: Añadido delay en el loop principal para prevenir reinicios por watchdog timer.
+### Critical Fixes
+- **Fix WiFi Crash**: Fixed crash during WiFi initialization (TCP/IP stack) that caused reboots on fresh installations.
+- **Fix Watchdog Bootloop**: Added a delay in the main loop to prevent watchdog timer resets.
 
 ## [v1.3.2] - 2026-01-29
-### Mejoras y Correcciones
-- **Factory Binary**: Generación automática de `factory.bin` en releases para instalaciones iniciales sin bootloop.
-- **Tabla de Particiones**: Nueva `partitions_custom.csv` optimizada para OTA con 3MB por app.
-- **Documentación**: README actualizado con instrucciones claras sobre cuándo usar `factory.bin` vs `firmware.bin`.
-- **CI/CD**: GitHub Actions ahora genera y publica automáticamente ambos binarios.
+### Improvements and Fixes
+- **Factory Binary**: Automatic generation of `factory.bin` in releases for initial installations without bootloops.
+- **Partition Table**: New `partitions_custom.csv` optimized for OTA with 3MB per app slot.
+- **Documentation**: Updated README with clear instructions on when to use `factory.bin` vs `firmware.bin`.
+- **CI/CD**: GitHub Actions now automatically builds and publishes both binaries.
 
 ## [v1.3.1] - 2026-01-29
-### Nuevas Funcionalidades
-- **Actualización OTA Mejorada**: Nueva interfaz de actualización persistente en el dispositivo que elimina parpadeos, muestra una barra de progreso real y evita solapamiento de textos.
-- **Atajos Avanzados (Combos)**: Soporte completo para combinaciones `CTRL+SHIFT+ALT+Tecla`.
-- **Constructor Visual de Atajos**: Panel en el dashboard web para crear combos marcando casillas, sin escribir texto manualmente.
-- **Controles Multimedia**: Añadidos comandos `next`, `prev` y `stop`.
-- **Iconos Visuales**: Los selectores de iconos en web y dispositivo ahora muestran el símbolo gráfico junto al nombre.
+### New Features
+- **Enhanced OTA Update**: New persistent update interface on the device that eliminates flickering, shows a real progress bar, and prevents text overlapping.
+- **Advanced Shortcuts (Combos)**: Full support for `CTRL+SHIFT+ALT+Key` combinations.
+- **Visual Shortcut Builder**: New panel in the web dashboard to create combos by checking boxes, without manual text entry.
+- **Media Controls**: Added `next`, `prev`, and `stop` commands.
+- **Visual Icons**: Icon selectors on web and device now show the graphic symbol next to the name.
 
-### Mejoras y Correcciones
-- **Fix Shift Fantasma**: Corregido error donde la librería HID enviaba `Shift` automáticamente al detectar mayúsculas.
-- **Seguridad**: Los archivos de sistema `win_btns.bin` y `mac_btns.bin` ahora están ocultos y protegidos contra borrado accidental.
-- **Icono PlayPause**: Nuevo icono combinado ▶⏸.
-- **CI/CD**: Generación automática de notas de release en GitHub a partir de este archivo Changelog.
+### Improvements and Fixes
+- **Fix Ghost Shift**: Fixed an issue where the HID library would automatically send `Shift` when uppercase characters were detected.
+- **Security**: System files `win_btns.bin` and `mac_btns.bin` are now hidden and protected against accidental deletion.
+- **PlayPause Icon**: New combined ▶⏸ icon.
+- **CI/CD**: Automatic GitHub release notes generation from this Changelog file.
 
 ## [v1.2.0] - 2026-01-27
-### Añadido
-- **Actualización Web OTA**: Nueva interfaz en el panel de control para subir archivos `.bin` y actualizar el firmware sin cables.
-- **Soporte macOS**: Mapeo automático de la tecla Cmd y lanzador Spotlight (`Cmd+Space`).
-- **Escritura Turbo**: Reducción del retardo de escritura a 5ms para un efecto de "pegado" instantáneo.
-- **Robustez I2C**: Validación de coordenadas táctiles para evitar clics fantasma y reducción de velocidad I2C a 100kHz.
-- **Licencia MIT**: Añadida licencia oficial al repositorio.
+### Added
+- **Web OTA Update**: New interface in the control panel to upload `.bin` files and update firmware wirelessly.
+- **macOS Support**: Automatic mapping of the Cmd key and Spotlight launcher (`Cmd+Space`).
+- **Turbo Typing**: Reduced typing delay to 5ms for an instant "paste" effect.
+- **I2C Robustness**: Validated touch coordinates to avoid ghost clicks and reduced I2C speed to 100kHz.
+- **MIT License**: Added official license to the repository.
 
-### Cambiado
-- **Sistema de Almacenamiento**: Migración de NVS a archivos binarios en LittleFS (`/win_btns.bin`, `/mac_btns.bin`) para perfiles ilimitados.
-- **Interfaz de Configuración**: Rediseño completo de la pantalla de edición de botones para evitar solapamientos.
-- **Colores de Interfaz**: Ahora todas las pantallas respetan el color de fondo global definido por el usuario.
+### Changed
+- **Storage System**: Migration from NVS to binary files in LittleFS (`/win_btns.bin`, `/mac_btns.bin`) for unlimited profiles.
+- **Configuration Interface**: Complete redesign of the button editing screen to prevent overlapping.
+- **Interface Colors**: All screens now respect the global background color defined by the user.
 
-### Corregido
-- **Error NVS Out of Space**: Solucionado mediante la migración a LittleFS.
-- **Click Fantasmas**: Solucionado con filtros de coordenadas en el driver táctil.
-- **Pantalla Negra**: Añadidos colores por defecto (gris oscuro) para evitar confusión en el primer arranque.
+### Fixed
+- **NVS Out of Space Error**: Resolved via migration to LittleFS.
+- **Ghost Clicks**: Solved with coordinate filters in the touch driver.
+- **Black Screen**: Added default colors (dark grey) to avoid confusion on first boot.
 
 ---
-*Este fork se centra en la estabilidad y la facilidad de uso multiplataforma.*
+*This fork focuses on stability and cross-platform ease of use.*
