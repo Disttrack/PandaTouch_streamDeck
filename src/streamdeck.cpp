@@ -9,8 +9,118 @@
 #include <ArduinoOTA.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <base64.h>
+#include <vector>
+#include <string>
 
 extern void set_brightness(uint8_t val);
+
+// ==========================================
+// LOCALIZATION (L10N)
+// ==========================================
+struct L10n {
+    const char* dash_title;
+    const char* kb_label;
+    const char* os_label;
+    const char* grid_label;
+    const char* bg_label;
+    const char* btn_config;
+    const char* btn_name_ph;
+    const char* btn_cmd_ph;
+    const char* type_app;
+    const char* type_media;
+    const char* type_basic;
+    const char* type_adv;
+    const char* save_changes;
+    const char* library;
+    const char* upload;
+    const char* backup_title;
+    const char* backup_btn;
+    const char* restore_btn;
+    const char* firmware_title;
+    const char* firmware_info;
+    const char* update_btn;
+    const char* updating_msg;
+    const char* confirm_restore;
+    const char* restore_ok;
+    const char* config_saved;
+    const char* delete_file_confirm;
+    const char* update_firmware_confirm;
+    const char* settings_title;
+    const char* global_bg;
+    const char* grid_size;
+    const char* target_os_label;
+    const char* wifi_setup_label;
+    const char* kb_lang_label;
+    const char* back_btn;
+    const char* cancel_btn;
+    const char* save;
+    const char* editing_btn_title;
+    const char* editing_bg_title;
+    const char* field_label;
+    const char* field_icon;
+    const char* field_action;
+    const char* field_cmd;
+    const char* field_img;
+    const char* field_ssid;
+    const char* field_pass;
+    const char* wifi_save_connect;
+    const char* select_grid;
+    const char* select_os;
+    const char* select_lang;
+    const char* none;
+    const char* basic_combo_desc;
+    const char* button_label;
+    const char* select_key_ph;
+    const char* sym_names[20];
+    const char* color_title;
+    const char* icon_title;
+    const char* image_title;
+};
+
+static const L10n g_l10n_en = {
+    "🎨 PandaDeck Dash", "Keyboard:", "OS:", "Grid:", "Background:",
+    "Button Configuration", "Name", "Command",
+    "App (Win+R / Cmd+Space)", "Media Key", "Basic Combo (Ctrl/Cmd + Key)", "Advanced Combo",
+    "Save Changes", "Library", "Upload",
+    "Backup & Restore", "Download Backup", "Restore Backup",
+    "Firmware OTA", "Select .bin file to update the device.", "Update",
+    "Updating System...", "Restore configuration? All settings will be overwritten.",
+    "Restore Complete!", "Configuration saved!", "Delete ",
+    "Update firmware? The device will restart.",
+    "Settings - Customization", "Global Background Color", "Grid Layout Size",
+    "Target OS (Win/Mac)", "WiFi Setup", "Keyboard Language (US/ES)",
+    "Back", "Cancel", "Save", "Editing Button ", "Editing Global Background",
+    "Label:", "Icon:", "Action:", "Cmd/Key:", "Custom Image:",
+    "SSID:", "Password:", "Save & Connect",
+    "Select Grid Layout", "Select Target OS", "Select Keyboard Language",
+    "None", "Basic combination uses Ctrl (Win) or Cmd (Mac) plus one key.",
+    "Button", "- Key -",
+    {"None", "OK", "Close", "Copy", "Paste", "Cut", "Play", "Pause", "PlayPause", "Mute", "Settings", "Home", "Save", "Edit", "File", "Dir", "Plus", "Prev", "Next", "Stop"},
+    "Background Color", "Icon", "Custom Image"
+};
+
+static const L10n g_l10n_es = {
+    "🎨 PandaDeck Dash", "Teclado:", "SO:", "Cuadrícula:", "Fondo:",
+    "Configuración de Botones", "Nombre", "Comando",
+    "App (Win+R / Cmd+Space)", "Multimedia", "Combo Básico (Ctrl/Cmd + Tecla)", "Combo Avanzado",
+    "Guardar Cambios", "Librería", "Subir",
+    "Copia de Seguridad", "Descargar Backup", "Restaurar Backup",
+    "Firmware OTA", "Selecciona archivo .bin para actualizar el dispositivo.", "Actualizar",
+    "Actualizando sistema...", "¿Restaurar configuración? Se sobrescribirán todos los ajustes.",
+    "¡Restauración completada!", "¡Configuración guardada!", "¿Borrar ",
+    "¿Deseas actualizar el firmware? El dispositivo se reiniciará.",
+    "Ajustes - Personalización", "Color de Fondo Global", "Tamaño de Cuadrícula",
+    "SO de Destino (Win/Mac)", "Configurar WiFi", "Idioma de Teclado (US/ES)",
+    "Atrás", "Cancelar", "Guardar", "Editando Botón ", "Editando Fondo Global",
+    "Etiqueta:", "Icono:", "Acción:", "Comando/Tecla:", "Imagen Custom:",
+    "SSID:", "Contraseña:", "Guardar y Conectar",
+    "Seleccionar Cuadrícula", "Seleccionar SO", "Seleccionar Idioma",
+    "Ninguno", "La combinación básica usa Ctrl (Windows) o Cmd (Mac) más una tecla.",
+    "Botón", "- Tecla -",
+    {"Ninguno", "Aceptar", "Cerrar", "Copiar", "Pegar", "Cortar", "Reproducir", "Pausa", "Play/Pausa", "Silencio", "Ajustes", "Inicio", "Guardar", "Editar", "Archivo", "Carpeta", "Más", "Anterior", "Siguiente", "Parar"},
+    "Color de Fondo", "Icono", "Imagen Personalizada"
+};
 
 // ==========================================
 // CONFIGURATION & STRUCTURES
@@ -18,10 +128,10 @@ extern void set_brightness(uint8_t val);
 struct ButtonConfig {
     char label[16];
     char value[256];
-    uint8_t type; // 0: Command (Win+R), 1: Media Key, 2: Key Combo (Ctrl+X)
+    uint8_t type; // 0: App, 1: Media, 2: Basic, 3: Adv
     uint32_t color;
-    char icon[8]; // Stores LVGL Symbol string (e.g. LV_SYMBOL_PLAY)
-    char imgPath[32]; // Path to custom image in LittleFS (e.g. "/chrome.png")
+    char icon[8];
+    char imgPath[32];
 };
 
 struct LegacyButtonConfig {
@@ -43,6 +153,10 @@ static char g_wifi_pass[64] = "";
 static uint8_t g_kb_lang = 0; // 0: US, 1: Spanish
 static String g_wifi_status = "Disconnected";
 static String g_ip_addr = "0.0.0.0";
+
+static const L10n* get_l10n() {
+    return (g_kb_lang == 1) ? &g_l10n_es : &g_l10n_en;
+}
 
 Preferences preferences;
 BleKeyboard bleKeyboard("PandaTouch Deck", "BigTreeTech", 100);
@@ -642,11 +756,12 @@ static void init_webserver() {
         };
 
         auto find_name = [&](const char* code) -> String {
-            if (!code || code[0] == '\0') return "None";
+            const L10n* curL = get_l10n();
+            if (!code || code[0] == '\0') return curL->sym_names[0];
             for(int j=0; j<20; j++) {
-                if(strcmp(code, g_sym_codes[j]) == 0) return g_sym_names[j];
+                if(strcmp(code, g_sym_codes[j]) == 0) return curL->sym_names[j];
             }
-            return "None";
+            return curL->sym_names[0];
         };
 
         String json = "{\"bg\":\"" + String(g_bg_color, HEX) + "\",\"rows\":" + String(g_rows) + ",\"cols\":" + String(g_cols) + ",\"os\":" + String(g_target_os) + ",\"lang\":" + String(g_kb_lang) + ",\"buttons\":[";
@@ -694,8 +809,9 @@ static void init_webserver() {
             }
 
             if(request->hasParam(p + "i", true)) {
+                const L10n* l = get_l10n();
                 String val = request->getParam(p + "i", true)->value();
-                if (val.length() > 0 && val != "Ninguno") {
+                if (val.length() > 0 && val != String(l->none)) {
                     if (!val.startsWith("/")) val = "/" + val;
                     strncpy(g_configs[i].imgPath, val.c_str(), 31);
                 } else {
@@ -751,6 +867,30 @@ static void init_webserver() {
             b["color"] = String(mac_btns[i].color, HEX);
             b["icon"] = mac_btns[i].icon;
             b["img"] = mac_btns[i].imgPath;
+        }
+
+        // Add assets from LittleFS
+        JsonObject assets = doc["assets"].to<JsonObject>();
+        File root = LittleFS.open("/");
+        if (root) {
+            File assetFile = root.openNextFile();
+            while (assetFile) {
+                String name = String(assetFile.name());
+                if (!assetFile.isDirectory() && 
+                    name != "win_btns.bin" && 
+                    name != "mac_btns.bin" && 
+                    !name.startsWith("._")) {
+                    
+                    size_t size = assetFile.size();
+                    uint8_t* buf = (uint8_t*)malloc(size);
+                    if (buf) {
+                        assetFile.read(buf, size);
+                        assets[name] = base64::encode(buf, size);
+                        free(buf);
+                    }
+                }
+                assetFile = root.openNextFile();
+            }
         }
 
         String output;
@@ -809,6 +949,56 @@ static void init_webserver() {
          // Check for specific button array updates
         if(!doc["win_btns"].isNull()) restore_btns(doc["win_btns"].as<JsonArray>(), "/win_btns.bin");
         if(!doc["mac_btns"].isNull()) restore_btns(doc["mac_btns"].as<JsonArray>(), "/mac_btns.bin");
+
+        // Restore Assets
+        if (!doc["assets"].isNull()) {
+            JsonObject assets = doc["assets"].as<JsonObject>();
+            for (JsonPair kv : assets) {
+                String filename = kv.key().c_str();
+                if (!filename.startsWith("/")) filename = "/" + filename;
+                String b64 = kv.value().as<String>();
+                
+                // Simple Base64 decode (manual since base64.h only has encode)
+                auto decode = [](String input) -> std::vector<uint8_t> {
+                    static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+                    auto is_base64 = [](unsigned char c) { return (isalnum(c) || (c == '+') || (c == '/')); };
+                    int in_len = input.length();
+                    int i = 0; int j = 0; int in_ = 0;
+                    unsigned char char_array_4[4], char_array_3[3];
+                    std::vector<uint8_t> ret;
+                    while (in_len-- && ( input[in_] != '=') && is_base64(input[in_])) {
+                        char_array_4[i++] = input[in_]; in_++;
+                        if (i == 4) {
+                            for (i = 0; i <4; i++) char_array_4[i] = base64_chars.find(char_array_4[i]);
+                            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+                            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+                            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+                            for (i = 0; (i < 3); i++) ret.push_back(char_array_3[i]);
+                            i = 0;
+                        }
+                    }
+                    if (i) {
+                        for (j = i; j <4; j++) char_array_4[j] = 0;
+                        for (j = 0; j <4; j++) char_array_4[j] = base64_chars.find(char_array_4[j]);
+                        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+                        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+                        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+                        for (j = 0; (j < i - 1); j++) ret.push_back(char_array_3[j]);
+                    }
+                    return ret;
+                };
+
+                std::vector<uint8_t> decoded = decode(b64);
+                if (decoded.size() > 0) {
+                    File f = LittleFS.open(filename, "w");
+                    if (f) {
+                        f.write(decoded.data(), decoded.size());
+                        f.close();
+                        Serial.printf("RESTORE: Asset %s saved\n", filename.c_str());
+                    }
+                }
+            }
+        }
 
             save_settings(false); // Save globals
             load_settings();     // Reload current active buttons
@@ -918,26 +1108,34 @@ static void init_webserver() {
 
     // Web Dashboard (UTF-8 Header)
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        String html = "<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>PandaDeck Dash</title>";
+        const L10n* l = get_l10n();
+        String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" + String(l->dash_title) + "</title>";
         html += "<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>";
         html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css'>";
         html += "<style>body{background:#121212;color:white}.card{background:#1e1e1e;border:1px solid #333;color:white;margin-bottom:15px}.btn-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:15px}.btn-del{padding:0 5px;color:#ff4444;cursor:pointer;border:none;background:none}.hidden-card{display:none} .icon-select{font-family: 'Font Awesome 6 Free', 'FontAwesome', sans-serif; font-weight: 900;} .combo-builder{background:#2a2a2a; border-radius:4px; padding:5px; margin-top:5px; border:1px solid #444;}</style>";
         html += "</head><body class='container py-4'>";
-        html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>🎨 PandaDeck Dash</h2>";
-        html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>Teclado:</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Español</option></select></div>";
-        html += "<div class='d-flex align-items-center gap-2'><label>SO:</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select><input type='hidden' id='osInput' name='os' form='configForm'></div>";
-        html += "<div class='d-flex align-items-center gap-2'><label>Cuadrícula:</label><select id='gridSelect' class='form-select form-select-sm' style='width:100px'><option value='2x2'>2x2</option><option value='3x2'>3x2</option><option value='3x3'>3x3</option><option value='4x3'>4x3</option><option value='5x3'>5x3</option></select><input type='hidden' id='rowsInput' name='rows' form='configForm'><input type='hidden' id='colsInput' name='cols' form='configForm'></div>";
-        html += "<div class='d-flex align-items-center gap-2'><label>Fondo:</label><input type='color' id='globalBg' name='bg' form='configForm' class='form-control form-control-color' style='height:35px'></div></div></div>";
+        html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>" + String(l->dash_title) + "</h2>";
+        html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>" + String(l->kb_label) + "</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Español</option></select></div>";
+        html += "<div class='d-flex align-items-center gap-2'><label>" + String(l->os_label) + "</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select><input type='hidden' id='osInput' name='os' form='configForm'></div>";
+        html += "<div class='d-flex align-items-center gap-2'><label>" + String(l->grid_label) + "</label><select id='gridSelect' class='form-select form-select-sm' style='width:100px'><option value='2x2'>2x2</option><option value='3x2'>3x2</option><option value='3x3'>3x3</option><option value='4x3'>4x3</option><option value='5x3'>5x3</option></select><input type='hidden' id='rowsInput' name='rows' form='configForm'><input type='hidden' id='colsInput' name='cols' form='configForm'></div>";
+        html += "<div class='d-flex align-items-center gap-2'><label>" + String(l->bg_label) + "</label><input type='color' id='globalBg' name='bg' form='configForm' class='form-control form-control-color' style='height:35px'></div></div></div>";
         
         html += "<div class='row'><div class='col-md-9'>";
-        html += "<div class='card p-3 mb-4'><h5>Configuración de Botones</h5><form id='configForm'><div class='btn-grid' id='buttonContainer'>";
+        html += "<div class='card p-3 mb-4'><h5>" + String(l->btn_config) + "</h5><form id='configForm'><div class='btn-grid' id='buttonContainer'>";
         for(int i=0; i<20; i++) {
             html += "<div class='card p-2 text-center btn-card' id='card"+String(i)+"'>";
-            html += "<b class='mb-2'>Botón " + String(i+1) + "</b>";
-            html += "<input type='text' name='b"+String(i)+"l' class='form-control form-control-sm mb-1' placeholder='Nombre' maxlength='15'>";
-            html += "<input type='text' name='b"+String(i)+"v' id='val"+String(i)+"' class='form-control form-control-sm mb-1 text-uppercase' placeholder='Comando' maxlength='255'>";
-            html += "<select name='b"+String(i)+"t' id='type"+String(i)+"' class='form-select form-select-sm mb-1' onchange='toggleBuilder("+String(i)+")'><option value='0'>App (Win+R)</option><option value='1'>Multimedia</option><option value='2'>Combo Básico</option><option value='3'>Combo Avanzado</option></select>";
+            html += "<b class='mb-2'>" + String(l->button_label) + " " + String(i+1) + "</b>";
+            html += "<input type='text' name='b"+String(i)+"l' class='form-control form-control-sm mb-1' placeholder='" + String(l->btn_name_ph) + "' maxlength='15'>";
+            html += "<input type='text' name='b"+String(i)+"v' id='val"+String(i)+"' class='form-control form-control-sm mb-1 text-uppercase' placeholder='" + String(l->btn_cmd_ph) + "' maxlength='255'>";
+            html += "<select name='b"+String(i)+"t' id='type"+String(i)+"' class='form-select form-select-sm mb-1' onchange='toggleBuilder("+String(i)+")'>";
+            html += "<option value='0'>" + String(l->type_app) + "</option>";
+            html += "<option value='1'>" + String(l->type_media) + "</option>";
+            html += "<option value='2'>" + String(l->type_basic) + "</option>";
+            html += "<option value='3'>" + String(l->type_adv) + "</option></select>";
             
+            // Helpful text for Basic Combo
+            html += "<div id='basicHint"+String(i)+"' class='small text-secondary mb-1 d-none' style='font-size:10px'>" + String(l->basic_combo_desc) + "</div>";
+
             // Combo Builder (Hidden by default)
             html += "<div id='builder"+String(i)+"' class='combo-builder d-none'>";
             html += "<div class='d-flex flex-wrap justify-content-center gap-1 mb-1'>";
@@ -950,51 +1148,52 @@ static void init_webserver() {
             html += "</div>";
 
             html += "<div class='d-flex gap-1 align-items-center mb-1 mt-1'>";
-            html += "<input type='color' name='b"+String(i)+"c' class='form-control form-control-color flex-grow-1' style='height:30px' title='Color Fondo'>";
-            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm icon-select' title='Icono'></select>";
+            html += "<input type='color' name='b"+String(i)+"c' class='form-control form-control-color flex-grow-1' style='height:30px' title='" + String(l->color_title) + "'>";
+            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm icon-select' title='" + String(l->icon_title) + "'></select>";
             html += "</div>";
-            html += "<select name='b"+String(i)+"i' class='form-select form-select-sm asset-select' title='Imagen Custom'></select>";
+            html += "<select name='b"+String(i)+"i' class='form-select form-select-sm asset-select' title='" + String(l->image_title) + "'></select>";
             html += "</div>";
         }
-        html += "</div><button type='submit' class='btn btn-primary mt-3 w-100'>Guardar Cambios</button></form></div></div>";
+        html += "</div><button type='submit' class='btn btn-primary mt-3 w-100'>" + String(l->save_changes) + "</button></form></div></div>";
         
-        html += "<div class='col-md-3'><div class='card p-3'><h5>Librería</h5>";
-        html += "<input type='file' id='fileInput' class='form-control form-control-sm mb-2'><button onclick='upload()' class='btn btn-sm btn-success w-100 mb-3'>Subir</button>";
+        html += "<div class='col-md-3'><div class='card p-3'><h5>" + String(l->library) + "</h5>";
+        html += "<input type='file' id='fileInput' class='form-control form-control-sm mb-2'><button onclick='upload()' class='btn btn-sm btn-success w-100 mb-3'>" + String(l->upload) + "</button>";
         html += "<ul id='fileList' class='list-group list-group-flush small'></ul></div>";
         html += "</div>";
-        html += "<div class='card p-3 mt-3'><h5>Copia de Seguridad</h5>";
-        html += "<button onclick='backup()' class='btn btn-sm btn-info w-100 mb-2'>Descargar Backup</button>";
+        html += "<div class='card p-3 mt-3'><h5>" + String(l->backup_title) + "</h5>";
+        html += "<button onclick='backup()' class='btn btn-sm btn-info w-100 mb-2'>" + String(l->backup_btn) + "</button>";
         html += "<input type='file' id='restoreInput' class='form-control form-control-sm mb-2' accept='.json'>";
-        html += "<button onclick='restore()' class='btn btn-sm btn-danger w-100'>Restaurar Backup</button>";
+        html += "<button onclick='restore()' class='btn btn-sm btn-danger w-100'>" + String(l->restore_btn) + "</button>";
         html += "</div>";
         
-        html += "<div class='card p-3 mt-3'><h5>Firmware OTA</h5>";
-        html += "<p class='small text-secondary'>Selecciona archivo .bin para actualizar el dispositivo.</p>";
+        html += "<div class='card p-3 mt-3'><h5>" + String(l->firmware_title) + "</h5>";
+        html += "<p class='small text-secondary'>" + String(l->firmware_info) + "</p>";
         html += "<input type='file' id='otaInput' class='form-control form-control-sm mb-2' accept='.bin'>";
-        html += "<button onclick='updateFirmware()' class='btn btn-sm btn-warning w-100'>Actualizar</button>";
+        html += "<button onclick='updateFirmware()' class='btn btn-sm btn-warning w-100'>" + String(l->update_btn) + "</button>";
         html += "<div class='progress mt-2' style='height: 10px; display:none;' id='otaProgressContainer'><div id='otaProgressBar' class='progress-bar progress-bar-striped progress-bar-animated bg-warning' style='width: 0%'></div></div>";
         html += "</div></div></div>";
         
         html += "<script>";
         html += "const SYMBOLS = {";
         for(int j=0; j<20; j++) {
-            html += "'" + String(g_sym_names[j]) + "': '" + String(g_sym_codes[j]) + "'";
+            html += "'" + String(l->sym_names[j]) + "': '" + String(g_sym_codes[j]) + "'";
             if(j < 19) html += ",";
         }
         html += "};";
         html += "const KEYS = ['','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','ENTER','TAB','ESC','BACKSPACE','DEL','SPACE','UP','DOWN','LEFT','RIGHT','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];";
-        html += "function toggleBuilder(i){ const t=document.getElementById('type'+i).value; document.getElementById('builder'+i).classList.toggle('d-none', t!='3'); if(t=='3') updC(i); }";
+        html += "function toggleBuilder(i){ const t=document.getElementById('type'+i).value; document.getElementById('builder'+i).classList.toggle('d-none', t!='3'); document.getElementById('basicHint'+i).classList.toggle('d-none', t!='2'); if(t=='3') updC(i); }";
         html += "function updC(i){ let c=''; if(document.getElementById('c'+i).checked) c+='CTRL+'; if(document.getElementById('s'+i).checked) c+='SHIFT+'; if(document.getElementById('a'+i).checked) c+='ALT+'; if(document.getElementById('m'+i).checked) c+='GUI+'; const k=document.getElementById('key'+i).value; if(k) c+=k; else if(c.endsWith('+')) c=c.slice(0,-1);  document.getElementById('val'+i).value = c; }";
         html += "function parseC(i,v){ if(!v)return; const p=v.toUpperCase().split('+'); document.getElementById('c'+i).checked=p.includes('CTRL'); document.getElementById('s'+i).checked=p.includes('SHIFT'); document.getElementById('a'+i).checked=p.includes('ALT'); document.getElementById('m'+i).checked=p.includes('GUI')||p.includes('WIN')||p.includes('CMD'); const k=p.find(x=>!['CTRL','SHIFT','ALT','GUI','WIN','CMD'].includes(x))||''; document.getElementById('key'+i).value=k; }";
         html += "document.getElementById('osSelect').onchange = async (e) => {";
         html += " document.getElementById('osInput').value = e.target.value;";
         html += " const fd = new FormData(); fd.append('os', e.target.value);";
         html += " await fetch('/api/save', {method:'POST', body:fd});";
-        html += " load();"; // Reload the whole config for the new OS
+        html += " load();";
         html += "};";
         html += "document.getElementById('langSelect').onchange = async (e) => {";
         html += " const fd = new FormData(); fd.append('lang', e.target.value);";
         html += " await fetch('/api/save', {method:'POST', body:fd});";
+        html += " location.reload();"; // Reload to change UI language
         html += "};";
         html += "document.getElementById('gridSelect').onchange = (e) => {";
         html += " const [c, r] = e.target.value.split('x').map(Number);";
@@ -1022,8 +1221,8 @@ static void init_webserver() {
         html += "  document.getElementById('langSelect').value = d.lang;";
         html += "  updateVisibleCards(d.rows, d.cols);";
         html += "  const selects = document.querySelectorAll('.asset-select');";
-        html += "  selects.forEach(s => { s.innerHTML = '<option value=\"\">Sin Imagen</option>'; files.forEach(file => s.innerHTML += `<option value='${file.name}'>${file.name}</option>`); });";
-        html += "  for(let i=0; i<20; i++){ const s=document.getElementById('key'+i); s.innerHTML = KEYS.map(k=>`<option value='${k}'>${k || '- Tecla -'}</option>`).join(''); }";
+        html += "  selects.forEach(s => { s.innerHTML = '<option value=\"\">" + String(l->none) + "</option>'; files.forEach(file => s.innerHTML += `<option value='${file.name}'>${file.name}</option>`); });";
+        html += "  for(let i=0; i<20; i++){ const s=document.getElementById('key'+i); s.innerHTML = KEYS.map(k=>`<option value='${k}'>${k || '" + String(l->select_key_ph) + "'}</option>`).join(''); }";
         html += "  d.buttons.forEach((b,i) => { ";
         html += "   const lbl = document.getElementsByName(`b${i}l`)[0]; if(!lbl) return;";
         html += "   lbl.value = b.label;";
@@ -1032,7 +1231,7 @@ static void init_webserver() {
         html += "   document.getElementsByName(`b${i}c`)[0].value = '#' + b.color.padStart(6,'0');";
         html += "   const sIcon = document.getElementsByName(`b${i}icon`)[0];";
         html += "   sIcon.innerHTML = Object.entries(SYMBOLS).map(([name, char]) => `<option value='${name}'>${char ? char + ' ' : ''}${name}</option>`).join('');";
-        html += "   sIcon.value = b.icon || 'None';";
+        html += "   sIcon.value = b.icon || '" + String(l->none) + "';";
         html += "   document.getElementsByName(`b${i}i`)[0].value = b.img.startsWith('/') ? b.img.substring(1) : b.img;";
         html += "   parseC(i, b.value); toggleBuilder(i);";
         html += "  });";
@@ -1041,7 +1240,7 @@ static void init_webserver() {
         html += " } catch(e) { console.error(e); }";
         html += "}";
         html += "document.getElementById('configForm').onsubmit = async (e) => { ";
-        html += " e.preventDefault(); const fd = new FormData(e.target); await fetch('/api/save', {method:'POST', body:fd}); alert('Configuración guardada!'); load();";
+        html += " e.preventDefault(); const fd = new FormData(e.target); await fetch('/api/save', {method:'POST', body:fd}); alert('" + String(l->config_saved) + "'); load();";
         html += "};";
         html += "async function upload(){";
         html += " const fi = document.getElementById('fileInput'); if(!fi.files[0]) return; const fd = new FormData(); fd.append('file', fi.files[0]); await fetch('/api/upload', {method:'POST', body:fd}); load();";
@@ -1053,20 +1252,20 @@ static void init_webserver() {
         html += " a.href = url; a.download = 'pandadeck_backup.json'; a.click();";
         html += "}";
         html += "async function restore(){";
-        html += " const fi = document.getElementById('restoreInput'); if(!fi.files[0]) return; if(!confirm('¿Restaurar configuración? Se sobrescribirán todos los ajustes.')) return;";
+        html += " const fi = document.getElementById('restoreInput'); if(!fi.files[0]) return; if(!confirm('" + String(l->confirm_restore) + "')) return;";
         html += " const reader = new FileReader(); reader.onload = async (e) => {";
-        html += "  await fetch('/api/restore', {method:'POST', body: e.target.result}); alert('Restauración completada!'); load();";
+        html += "  await fetch('/api/restore', {method:'POST', body: e.target.result}); alert('" + String(l->restore_ok) + "'); location.reload();";
         html += " }; reader.readAsText(fi.files[0]);";
         html += "}";
-        html += "async function del(name){ if(!confirm('¿Borrar '+name+'?')) return; const fd = new FormData(); fd.append('filename', name); await fetch('/api/delete', {method:'POST', body:fd}); load(); }";
+        html += "async function del(name){ if(!confirm('" + String(l->delete_file_confirm) + "'+name+'?')) return; const fd = new FormData(); fd.append('filename', name); await fetch('/api/delete', {method:'POST', body:fd}); load(); }";
         html += "async function updateFirmware() {";
-        html += " const file = document.getElementById('otaInput').files[0]; if(!file) return; if(!confirm('¿Deseas actualizar el firmware? El dispositivo se reiniciará.')) return;";
+        html += " const file = document.getElementById('otaInput').files[0]; if(!file) return; if(!confirm('" + String(l->update_firmware_confirm) + "')) return;";
         html += " const fd = new FormData(); fd.append('update', file);";
         html += " const xhr = new XMLHttpRequest();";
         html += " xhr.open('POST', '/api/update', true);";
         html += " document.getElementById('otaProgressContainer').style.display = 'block';";
         html += " xhr.upload.onprogress = (e) => { if(e.lengthComputable) { const p = (e.loaded / e.total) * 100; document.getElementById('otaProgressBar').style.width = p + '%'; } };";
-        html += " xhr.onload = () => { if(xhr.status === 200) { alert('Actualización completada. Reiniciando...'); location.reload(); } else { alert('Error en la actualización.'); document.getElementById('otaProgressContainer').style.display = 'none'; } };";
+        html += " xhr.onload = () => { if(xhr.status === 200) { alert('Update OK. Restarting...'); location.reload(); } else { alert('Error in update.'); document.getElementById('otaProgressContainer').style.display = 'none'; } };";
         html += " xhr.send(fd);";
         html += "}";
         html += "load();</script></body></html>";
@@ -1211,6 +1410,7 @@ static void create_main_ui() {
 // UI - SETTINGS LIST
 // ==========================================
 static void create_settings_ui() {
+    const L10n* l = get_l10n();
     // Only rebuild if screen doesn't exist or if grid size changed
     if (g_settings_screen == nullptr || g_settings_needs_rebuild) {
         if (g_settings_screen != nullptr) {
@@ -1221,7 +1421,7 @@ static void create_settings_ui() {
         lv_obj_set_style_bg_color(g_settings_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
 
         lv_obj_t *title = lv_label_create(g_settings_screen);
-        lv_label_set_text(title, "Settings - Customization");
+        lv_label_set_text(title, l->settings_title);
         lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
         lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
@@ -1229,25 +1429,25 @@ static void create_settings_ui() {
         lv_obj_set_size(list, 600, 360); // Slightly taller
         lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 45);
 
-        lv_obj_t *bg_btn = lv_list_add_btn(list, "\xEF\x80\xBE", "Global Background Color"); // IMAGE
+        lv_obj_t *bg_btn = lv_list_add_btn(list, "\xEF\x80\xBE", l->global_bg); // IMAGE
         lv_obj_add_event_cb(bg_btn, settings_bg_btn_cb, LV_EVENT_CLICKED, NULL);
 
-        lv_obj_t *grid_btn = lv_list_add_btn(list, "\xEF\x80\x8A", "Grid Layout Size"); // THUMBNAILS/GRID
+        lv_obj_t *grid_btn = lv_list_add_btn(list, "\xEF\x80\x8A", l->grid_size); // THUMBNAILS/GRID
         lv_obj_add_event_cb(grid_btn, settings_grid_btn_cb, LV_EVENT_CLICKED, NULL);
 
-        lv_obj_t *os_btn = lv_list_add_btn(list, "\xEF\x84\xb9", "Target OS (Win/Mac)"); // DESKTOP
+        lv_obj_t *os_btn = lv_list_add_btn(list, "\xEF\x84\xb9", l->target_os_label); // DESKTOP
         lv_obj_add_event_cb(os_btn, settings_os_btn_cb, LV_EVENT_CLICKED, NULL);
 
-        lv_obj_t *wifi_btn = lv_list_add_btn(list, "\xEF\x87\xAB", "WiFi Setup"); // WIFI
+        lv_obj_t *wifi_btn = lv_list_add_btn(list, "\xEF\x87\xAB", l->wifi_setup_label); // WIFI
         lv_obj_add_event_cb(wifi_btn, settings_wifi_btn_cb, LV_EVENT_CLICKED, NULL);
 
-        lv_obj_t *lang_btn = lv_list_add_btn(list, "\xEF\x81\x92", "Keyboard Language (US/ES)"); // KEYBOARD
+        lv_obj_t *lang_btn = lv_list_add_btn(list, "\xEF\x81\x92", l->kb_lang_label); // KEYBOARD
         lv_obj_add_event_cb(lang_btn, settings_lang_btn_cb, LV_EVENT_CLICKED, NULL);
 
         int btn_count = g_rows * g_cols;
         for (int i = 0; i < btn_count; i++) {
-            char buf[32];
-            sprintf(buf, "Button %d: %s", (i+1), g_configs[i].label);
+            char buf[64];
+            sprintf(buf, "%s %d: %s", (g_kb_lang == 1 ? "Botón" : "Button"), (i+1), g_configs[i].label);
             lv_obj_t *btn = lv_list_add_btn(list, "\xEF\x8C\x84", buf); // EDIT
             lv_obj_add_event_cb(btn, edit_btn_select_cb, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
         }
@@ -1256,7 +1456,7 @@ static void create_settings_ui() {
         lv_obj_set_size(back, 140, 50);
         lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -10);
         lv_obj_t *lbl = lv_label_create(back);
-        lv_label_set_text(lbl, "\xEF\x81\x93" " Back"); // LEFT
+        lv_label_set_text_fmt(lbl, "\xEF\x81\x93 %s", l->back_btn); // LEFT
         lv_obj_add_event_cb(back, back_to_main_cb, LV_EVENT_CLICKED, NULL);
         
         g_settings_needs_rebuild = false;
@@ -1276,16 +1476,17 @@ struct WifiUIData {
 static WifiUIData g_wifi_data;
 
 static void create_wifi_ui() {
+    const L10n* l = get_l10n();
     g_wifi_screen = lv_obj_create(NULL);
     lv_scr_load(g_wifi_screen);
     lv_obj_set_style_bg_color(g_wifi_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
 
     lv_obj_t *title = lv_label_create(g_wifi_screen);
-    lv_label_set_text(title, "WiFi Configuration");
+    lv_label_set_text(title, l->wifi_setup_label);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
     lv_obj_t *l1 = lv_label_create(g_wifi_screen);
-    lv_label_set_text(l1, "SSID:");
+    lv_label_set_text(l1, l->field_ssid);
     lv_obj_align(l1, LV_ALIGN_TOP_LEFT, 20, 50);
     g_wifi_data.ta_ssid = lv_textarea_create(g_wifi_screen);
     lv_textarea_set_one_line(g_wifi_data.ta_ssid, true);
@@ -1294,7 +1495,7 @@ static void create_wifi_ui() {
     lv_textarea_set_text(g_wifi_data.ta_ssid, g_wifi_ssid);
 
     lv_obj_t *l2 = lv_label_create(g_wifi_screen);
-    lv_label_set_text(l2, "Password:");
+    lv_label_set_text(l2, l->field_pass);
     lv_obj_align(l2, LV_ALIGN_TOP_LEFT, 20, 120);
     g_wifi_data.ta_pass = lv_textarea_create(g_wifi_screen);
     lv_textarea_set_one_line(g_wifi_data.ta_pass, true);
@@ -1315,14 +1516,14 @@ static void create_wifi_ui() {
     lv_obj_set_size(save, 160, 50);
     lv_obj_align(save, LV_ALIGN_TOP_RIGHT, -20, 70);
     lv_obj_t *sl = lv_label_create(save);
-    lv_label_set_text(sl, "\xEF\x83\x87" " Save & Connect");
+    lv_label_set_text_fmt(sl, "\xEF\x83\x87 %s", l->wifi_save_connect);
     lv_obj_add_event_cb(save, save_wifi_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *cancel = lv_btn_create(g_wifi_screen);
-    lv_obj_set_size(cancel, 120, 50);
+    lv_obj_set_size(cancel, 140, 50);
     lv_obj_align(cancel, LV_ALIGN_TOP_RIGHT, -20, 130);
     lv_obj_t *cl = lv_label_create(cancel);
-    lv_label_set_text(cl, "\xEF\x80\x8D" " Cancel");
+    lv_label_set_text_fmt(cl, "\xEF\x80\x8D %s", l->cancel_btn);
     lv_obj_add_event_cb(cancel, back_to_main_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -1339,14 +1540,15 @@ struct EditUIData {
 static EditUIData g_edit_data;
 
 static void create_edit_ui(uint8_t idx) {
+    const L10n* l = get_l10n();
     if (!g_editing_bg) g_editing_idx = idx;
     g_edit_screen = lv_obj_create(NULL);
     lv_scr_load(g_edit_screen);
     lv_obj_set_style_bg_color(g_edit_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
 
     lv_obj_t *title = lv_label_create(g_edit_screen);
-    if (g_editing_bg) lv_label_set_text(title, "Editing Global Background");
-    else lv_label_set_text_fmt(title, "Editing Button %d", (idx + 1));
+    if (g_editing_bg) lv_label_set_text(title, l->editing_bg_title);
+    else lv_label_set_text_fmt(title, "%s %d", l->editing_btn_title, (idx + 1));
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
 
     uint32_t curr_color = g_editing_bg ? g_bg_color : g_configs[idx].color;
@@ -1354,7 +1556,7 @@ static void create_edit_ui(uint8_t idx) {
     if (!g_editing_bg) {
         // Label Field
         lv_obj_t *l1 = lv_label_create(g_edit_screen);
-        lv_label_set_text(l1, "Label:");
+        lv_label_set_text(l1, l->field_label);
         lv_obj_align(l1, LV_ALIGN_TOP_LEFT, 20, 35);
         g_edit_data.ta_label = lv_textarea_create(g_edit_screen);
         lv_textarea_set_one_line(g_edit_data.ta_label, true);
@@ -1364,7 +1566,7 @@ static void create_edit_ui(uint8_t idx) {
 
         // Icon Selector
         lv_obj_t *li = lv_label_create(g_edit_screen);
-        lv_label_set_text(li, "Icon:");
+        lv_label_set_text(li, l->field_icon);
         lv_obj_align(li, LV_ALIGN_TOP_LEFT, 220, 35);
         g_edit_data.dd_icon = lv_dropdown_create(g_edit_screen);
         lv_obj_set_size(g_edit_data.dd_icon, 180, 40);
@@ -1382,17 +1584,18 @@ static void create_edit_ui(uint8_t idx) {
 
         // Type Selector
         lv_obj_t *l2 = lv_label_create(g_edit_screen);
-        lv_label_set_text(l2, "Action:");
+        lv_label_set_text(l2, l->field_action);
         lv_obj_align(l2, LV_ALIGN_TOP_LEFT, 20, 105);
         g_edit_data.dd_type = lv_dropdown_create(g_edit_screen);
         lv_obj_set_size(g_edit_data.dd_type, 180, 40);
-        lv_dropdown_set_options(g_edit_data.dd_type, "Launch App\nMedia Key\nCombo Basic\nCombo Advanced");
+        String type_opts = String(l->type_app) + "\n" + l->type_media + "\n" + l->type_basic + "\n" + l->type_adv;
+        lv_dropdown_set_options(g_edit_data.dd_type, type_opts.c_str());
         lv_obj_align(g_edit_data.dd_type, LV_ALIGN_TOP_LEFT, 20, 125);
         lv_dropdown_set_selected(g_edit_data.dd_type, g_configs[idx].type);
 
         // Value Field
         lv_obj_t *l3 = lv_label_create(g_edit_screen);
-        lv_label_set_text(l3, "Cmd/Key:");
+        lv_label_set_text(l3, l->field_cmd);
         lv_obj_align(l3, LV_ALIGN_TOP_LEFT, 220, 105);
         g_edit_data.ta_value = lv_textarea_create(g_edit_screen);
         lv_textarea_set_one_line(g_edit_data.ta_value, true);
@@ -1403,13 +1606,13 @@ static void create_edit_ui(uint8_t idx) {
 
         // Custom Image Selector
         lv_obj_t *li2 = lv_label_create(g_edit_screen);
-        lv_label_set_text(li2, "Custom Image:");
+        lv_label_set_text(li2, l->field_img);
         lv_obj_align(li2, LV_ALIGN_TOP_LEFT, 120, 175);
         g_edit_data.dd_img = lv_dropdown_create(g_edit_screen);
         lv_obj_set_size(g_edit_data.dd_img, 180, 40);
         lv_obj_align(g_edit_data.dd_img, LV_ALIGN_TOP_LEFT, 120, 195);
 
-        String opts = "Ninguno";
+        String opts = l->none;
         File root = LittleFS.open("/");
         File f = root.openNextFile();
         int sel_idx = 0;
@@ -1461,14 +1664,14 @@ static void create_edit_ui(uint8_t idx) {
     lv_obj_set_size(save, 140, 50);
     lv_obj_align(save, LV_ALIGN_BOTTOM_RIGHT, -10, -5);
     lv_obj_t *sl = lv_label_create(save);
-    lv_label_set_text(sl, "\xEF\x83\x87" " Save"); // SAVE
+    lv_label_set_text_fmt(sl, "\xEF\x83\x87 %s", l->save);
     lv_obj_add_event_cb(save, save_edit_cb, LV_EVENT_CLICKED, &g_edit_data);
 
     lv_obj_t *cancel = lv_btn_create(g_edit_screen);
     lv_obj_set_size(cancel, 140, 50);
     lv_obj_align(cancel, LV_ALIGN_BOTTOM_LEFT, 10, -5);
     lv_obj_t *cl = lv_label_create(cancel);
-    lv_label_set_text(cl, "\xEF\x80\x8D" " Cancel"); // CLOSE
+    lv_label_set_text_fmt(cl, "\xEF\x80\x8D %s", l->cancel_btn);
     lv_obj_add_event_cb(cancel, back_to_main_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -1538,6 +1741,7 @@ static void edit_btn_select_cb(lv_event_t *e) {
 }
 
 static void save_edit_cb(lv_event_t *e) {
+    const L10n* l = get_l10n();
     EditUIData* data = (EditUIData*)lv_event_get_user_data(e);
     
     uint8_t r = (uint8_t)lv_slider_get_value(g_slider_r);
@@ -1558,9 +1762,9 @@ static void save_edit_cb(lv_event_t *e) {
             const char* sym = get_symbol_by_index(lv_dropdown_get_selected(data->dd_icon));
             strncpy(g_configs[g_editing_idx].icon, sym, 7);
 
-            char buf[32];
+            char buf[64];
             lv_dropdown_get_selected_str(data->dd_img, buf, sizeof(buf));
-            if (strcmp(buf, "Ninguno") == 0) {
+            if (strcmp(buf, l->none) == 0) {
                 g_configs[g_editing_idx].imgPath[0] = '\0';
             } else {
                 String val = buf;
@@ -1598,12 +1802,13 @@ static void grid_select_cb(lv_event_t *e) {
 }
 
 static void settings_grid_btn_cb(lv_event_t* e) {
+    const L10n* l = get_l10n();
     lv_obj_t *screen = lv_obj_create(NULL);
     lv_scr_load(screen);
     lv_obj_set_style_bg_color(screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
     
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Select Grid Layout");
+    lv_label_set_text(title, l->select_grid);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
     
@@ -1618,10 +1823,10 @@ static void settings_grid_btn_cb(lv_event_t* e) {
     }
     
     lv_obj_t *back = lv_btn_create(screen);
-    lv_obj_set_size(back, 120, 45);
+    lv_obj_set_size(back, 140, 50);
     lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_t *lbl = lv_label_create(back);
-    lv_label_set_text(lbl, "Cancel");
+    lv_label_set_text_fmt(lbl, "\xEF\x80\x8D %s", l->cancel_btn);
     lv_obj_add_event_cb(back, settings_btn_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -1642,12 +1847,13 @@ static void os_select_cb(lv_event_t *e) {
 }
 
 static void settings_os_btn_cb(lv_event_t* e) {
+    const L10n* l = get_l10n();
     lv_obj_t *screen = lv_obj_create(NULL);
     lv_scr_load(screen);
     lv_obj_set_style_bg_color(screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
     
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Select Target OS");
+    lv_label_set_text(title, l->select_os);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
     
@@ -1662,10 +1868,10 @@ static void settings_os_btn_cb(lv_event_t* e) {
     }
     
     lv_obj_t *back = lv_btn_create(screen);
-    lv_obj_set_size(back, 120, 45);
+    lv_obj_set_size(back, 140, 50);
     lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_t *lbl = lv_label_create(back);
-    lv_label_set_text(lbl, "Cancel");
+    lv_label_set_text_fmt(lbl, "\xEF\x80\x8D %s", l->cancel_btn);
     lv_obj_add_event_cb(back, settings_btn_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -1685,12 +1891,13 @@ static void lang_select_cb(lv_event_t *e) {
 }
 
 static void settings_lang_btn_cb(lv_event_t* e) {
+    const L10n* l = get_l10n();
     lv_obj_t *screen = lv_obj_create(NULL);
     lv_scr_load(screen);
     lv_obj_set_style_bg_color(screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
     
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Select Keyboard Language");
+    lv_label_set_text(title, l->select_lang);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
     
@@ -1705,10 +1912,10 @@ static void settings_lang_btn_cb(lv_event_t* e) {
     }
     
     lv_obj_t *back = lv_btn_create(screen);
-    lv_obj_set_size(back, 120, 45);
+    lv_obj_set_size(back, 140, 50);
     lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_t *lbl = lv_label_create(back);
-    lv_label_set_text(lbl, "Cancel");
+    lv_label_set_text_fmt(lbl, "\xEF\x80\x8D %s", l->cancel_btn);
     lv_obj_add_event_cb(back, settings_btn_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -1751,7 +1958,7 @@ static void show_update_screen() {
     lv_obj_set_style_radius(cont, 10, LV_PART_MAIN);
 
     g_update_label = lv_label_create(cont);
-    lv_label_set_text(g_update_label, (g_kb_lang == 1 ? "Actualizando firmware..." : "Updating firmware..."));
+    lv_label_set_text(g_update_label, get_l10n()->updating_msg);
     lv_obj_set_style_text_color(g_update_label, lv_color_hex(0xffffff), LV_PART_MAIN);
     lv_obj_set_style_text_align(g_update_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_align(g_update_label, LV_ALIGN_TOP_MID, 0, 20);
