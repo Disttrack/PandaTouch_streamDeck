@@ -57,11 +57,13 @@ static lv_obj_t* g_edit_screen = nullptr;
 static lv_obj_t* g_wifi_screen = nullptr;
 static lv_obj_t* g_color_picker = nullptr;
 static lv_obj_t* g_dd_icon = nullptr; // Icon selector
+static lv_obj_t* g_wifi_label = nullptr; // WiFi IP label on main screen
 static uint8_t g_editing_idx = 0;
 static bool g_editing_bg = false;
 static lv_obj_t *g_slider_r, *g_slider_g, *g_slider_b;
 static lv_obj_t *g_preview;
 static volatile bool g_pending_ui_update = false;
+static bool g_settings_needs_rebuild = true; // Flag to control settings screen rebuild
 static lv_obj_t* g_update_screen = nullptr;
 static lv_obj_t* g_update_bar = nullptr;
 static lv_obj_t* g_update_label = nullptr;
@@ -614,6 +616,13 @@ static void check_wifi_internal() {
             Serial.println("WiFi Disconnected.");
         }
         was_connected = is_connected;
+        
+        // Update WiFi label on main screen if it exists
+        if (g_wifi_label != nullptr) {
+            String wtxt = "\xEF\x87\xAB " + g_ip_addr; // WIFI icon + IP
+            lv_label_set_text(g_wifi_label, wtxt.c_str());
+            Serial.println("UI: WiFi label updated");
+        }
     }
 }
 
@@ -1185,10 +1194,10 @@ static void create_main_ui() {
     lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     // WiFi Status Label
-    lv_obj_t *wlbl = lv_label_create(grid);
+    g_wifi_label = lv_label_create(grid);
     String wtxt = "\xEF\x87\xAB " + g_ip_addr; // WIFI icon
-    lv_label_set_text(wlbl, wtxt.c_str());
-    lv_obj_set_grid_cell(wlbl, LV_GRID_ALIGN_CENTER, 1, (g_cols > 2 ? g_cols - 2 : 1), LV_GRID_ALIGN_CENTER, g_rows, 1);
+    lv_label_set_text(g_wifi_label, wtxt.c_str());
+    lv_obj_set_grid_cell(g_wifi_label, LV_GRID_ALIGN_CENTER, 1, (g_cols > 2 ? g_cols - 2 : 1), LV_GRID_ALIGN_CENTER, g_rows, 1);
     
     // Settings Button
     lv_obj_t *set_btn = lv_btn_create(grid);
@@ -1202,48 +1211,59 @@ static void create_main_ui() {
 // UI - SETTINGS LIST
 // ==========================================
 static void create_settings_ui() {
-    g_settings_screen = lv_obj_create(NULL);
-    lv_scr_load(g_settings_screen);
-    lv_obj_set_style_bg_color(g_settings_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
+    // Only rebuild if screen doesn't exist or if grid size changed
+    if (g_settings_screen == nullptr || g_settings_needs_rebuild) {
+        if (g_settings_screen != nullptr) {
+            lv_obj_del(g_settings_screen);
+        }
+        
+        g_settings_screen = lv_obj_create(NULL);
+        lv_obj_set_style_bg_color(g_settings_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
 
-    lv_obj_t *title = lv_label_create(g_settings_screen);
-    lv_label_set_text(title, "Settings - Customization");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+        lv_obj_t *title = lv_label_create(g_settings_screen);
+        lv_label_set_text(title, "Settings - Customization");
+        lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+        lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
-    lv_obj_t *list = lv_list_create(g_settings_screen);
-    lv_obj_set_size(list, 600, 360); // Slightly taller
-    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 45);
+        lv_obj_t *list = lv_list_create(g_settings_screen);
+        lv_obj_set_size(list, 600, 360); // Slightly taller
+        lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 45);
 
-    lv_obj_t *bg_btn = lv_list_add_btn(list, "\xEF\x80\xBE", "Global Background Color"); // IMAGE
-    lv_obj_add_event_cb(bg_btn, settings_bg_btn_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *bg_btn = lv_list_add_btn(list, "\xEF\x80\xBE", "Global Background Color"); // IMAGE
+        lv_obj_add_event_cb(bg_btn, settings_bg_btn_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *grid_btn = lv_list_add_btn(list, "\xEF\x80\x8A", "Grid Layout Size"); // THUMBNAILS/GRID
-    lv_obj_add_event_cb(grid_btn, settings_grid_btn_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *grid_btn = lv_list_add_btn(list, "\xEF\x80\x8A", "Grid Layout Size"); // THUMBNAILS/GRID
+        lv_obj_add_event_cb(grid_btn, settings_grid_btn_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *os_btn = lv_list_add_btn(list, "\xEF\x84\xb9", "Target OS (Win/Mac)"); // DESKTOP
-    lv_obj_add_event_cb(os_btn, settings_os_btn_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *os_btn = lv_list_add_btn(list, "\xEF\x84\xb9", "Target OS (Win/Mac)"); // DESKTOP
+        lv_obj_add_event_cb(os_btn, settings_os_btn_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *wifi_btn = lv_list_add_btn(list, "\xEF\x87\xAB", "WiFi Setup"); // WIFI
-    lv_obj_add_event_cb(wifi_btn, settings_wifi_btn_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *wifi_btn = lv_list_add_btn(list, "\xEF\x87\xAB", "WiFi Setup"); // WIFI
+        lv_obj_add_event_cb(wifi_btn, settings_wifi_btn_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *lang_btn = lv_list_add_btn(list, "\xEF\x81\x92", "Keyboard Language (US/ES)"); // KEYBOARD
-    lv_obj_add_event_cb(lang_btn, settings_lang_btn_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *lang_btn = lv_list_add_btn(list, "\xEF\x81\x92", "Keyboard Language (US/ES)"); // KEYBOARD
+        lv_obj_add_event_cb(lang_btn, settings_lang_btn_cb, LV_EVENT_CLICKED, NULL);
 
-    int btn_count = g_rows * g_cols;
-    for (int i = 0; i < btn_count; i++) {
-        char buf[32];
-        sprintf(buf, "Button %d: %s", (i+1), g_configs[i].label);
-        lv_obj_t *btn = lv_list_add_btn(list, "\xEF\x8C\x84", buf); // EDIT
-        lv_obj_add_event_cb(btn, edit_btn_select_cb, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
+        int btn_count = g_rows * g_cols;
+        for (int i = 0; i < btn_count; i++) {
+            char buf[32];
+            sprintf(buf, "Button %d: %s", (i+1), g_configs[i].label);
+            lv_obj_t *btn = lv_list_add_btn(list, "\xEF\x8C\x84", buf); // EDIT
+            lv_obj_add_event_cb(btn, edit_btn_select_cb, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
+        }
+
+        lv_obj_t *back = lv_btn_create(g_settings_screen);
+        lv_obj_set_size(back, 140, 50);
+        lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_t *lbl = lv_label_create(back);
+        lv_label_set_text(lbl, "\xEF\x81\x93" " Back"); // LEFT
+        lv_obj_add_event_cb(back, back_to_main_cb, LV_EVENT_CLICKED, NULL);
+        
+        g_settings_needs_rebuild = false;
     }
-
-    lv_obj_t *back = lv_btn_create(g_settings_screen);
-    lv_obj_set_size(back, 140, 50);
-    lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_t *lbl = lv_label_create(back);
-    lv_label_set_text(lbl, "\xEF\x81\x93" " Back"); // LEFT
-    lv_obj_add_event_cb(back, back_to_main_cb, LV_EVENT_CLICKED, NULL);
+    
+    // Load screen after creation to reduce visible flicker
+    lv_scr_load(g_settings_screen);
 }
 
 // ==========================================
@@ -1571,6 +1591,7 @@ static void grid_select_cb(lv_event_t *e) {
     else if (strcmp(buf, "4x3") == 0) { g_cols = 4; g_rows = 3; }
     else if (strcmp(buf, "5x3") == 0) { g_cols = 5; g_rows = 3; }
     
+    g_settings_needs_rebuild = true; // Force settings screen rebuild with new button count
     save_settings();
     lv_scr_load(g_main_screen);
     create_main_ui();
