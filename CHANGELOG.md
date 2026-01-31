@@ -2,11 +2,12 @@
 
 All improvements and changes made in this enhanced version.
 
-## [v1.4.2] - 2026-01-31
+## [v1.5.0] - 2026-01-31
 ### Bug Fixes
-- **Fix Boot Loop**: Resolved critical "Invalid image block" boot loop by synchronizing flash configuration.
-- **Build System Fix**: Fixed a massive discrepancy in GitHub Actions where the factory binary was being generated with `DIO` and `8MB` while the project required `QIO` and `16MB`. 
-- **Restored Performance**: Reverted to original `qio_opi` memory type to ensure correct PSRAM and screen operation.
+- **Definitive Hybrid Fix**: Successfully matched the original BTT firmware's 80MHz QIO/OPI performance.
+- **Boot Stability**: Using DIO mode for the bootloader header to ensure 100% reliable starts on all hardware units (fixes `ets_loader.c 78`).
+- **Screen Performance**: Fixed interference and artifacts by correctly mapping the Octal PSRAM at 80MHz with the `qio_opi` memory type.
+- **Size Unification**: Locked 16MB flash size across all build and release stages.
 
 ## [v1.4.0] - 2026-01-30
 ### New Features

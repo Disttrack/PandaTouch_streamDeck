@@ -24,11 +24,11 @@ The original PandaTouch firmware uses a different partition layout than this pro
 
 ### Option A: Easy Flashing (No-Code)
 The fastest way for non-developers. You only need a Chrome-based browser:
-1. Download the latest `factory.bin` (not firmware.bin) from the releases page. This file contains the bootloader, partitions, and app all in one.
+1. Download the latest `pandatouch_vX.Y.Z_factory.bin` (not firmware.bin) from the [Releases](https://github.com/Disttrack/PandaTouch_streamDeck/releases) page. This file contains the bootloader, partitions, and app all in one.
 2. Go to [ESP Web Tools](https://web.esphome.io/).
 3. Connect your PandaTouch via USB-C and click **Connect**.
 4. Click **Install** and select the `.bin` file.
-   - **Important**: If asked for an offset/address, you MUST use `0x0` (zero).
+   - **Critical Flash Mode**: If you use a different flashing tool (like ESP Flash Tool), you MUST select **Flash Mode: DIO** (Dual I/O) and **Offset: 0x0**. While the device uses QIO for screen performance, the initial boot stage requires DIO to start correctly.
 5. Wait for the process to finish. Your device will reboot with the new system.
 
 ### Option B: Advanced (PlatformIO)
