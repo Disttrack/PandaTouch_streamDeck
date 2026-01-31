@@ -13,6 +13,7 @@
 #include <vector>
 #include <string>
 
+
 extern void set_brightness(uint8_t val);
 
 // ==========================================
@@ -958,32 +959,39 @@ static void init_webserver() {
                 if (!filename.startsWith("/")) filename = "/" + filename;
                 String b64 = kv.value().as<String>();
                 
-                // Simple Base64 decode (manual since base64.h only has encode)
+                // Robust Base64 decode
                 auto decode = [](String input) -> std::vector<uint8_t> {
-                    static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-                    auto is_base64 = [](unsigned char c) { return (isalnum(c) || (c == '+') || (c == '/')); };
-                    int in_len = input.length();
-                    int i = 0; int j = 0; int in_ = 0;
-                    unsigned char char_array_4[4], char_array_3[3];
                     std::vector<uint8_t> ret;
-                    while (in_len-- && ( input[in_] != '=') && is_base64(input[in_])) {
-                        char_array_4[i++] = input[in_]; in_++;
+                    int i = 0;
+                    uint8_t char_array_4[4], char_array_3[3];
+                    auto b64_decode = [](char c) -> int {
+                        if (c >= 'A' && c <= 'Z') return c - 'A';
+                        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+                        if (c >= '0' && c <= '9') return c - '0' + 52;
+                        if (c == '+') return 62;
+                        if (c == '/') return 63;
+                        return -1;
+                    };
+                    for (size_t in_ = 0; in_ < input.length(); in_++) {
+                        char c = input[in_];
+                        if (c == '=') break;
+                        int val = b64_decode(c);
+                        if (val == -1) continue;
+                        char_array_4[i++] = (uint8_t)val;
                         if (i == 4) {
-                            for (i = 0; i <4; i++) char_array_4[i] = base64_chars.find(char_array_4[i]);
                             char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
                             char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
                             char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-                            for (i = 0; (i < 3); i++) ret.push_back(char_array_3[i]);
+                            for (i = 0; i < 3; i++) ret.push_back(char_array_3[i]);
                             i = 0;
                         }
                     }
                     if (i) {
-                        for (j = i; j <4; j++) char_array_4[j] = 0;
-                        for (j = 0; j <4; j++) char_array_4[j] = base64_chars.find(char_array_4[j]);
+                        for (int j = i; j < 4; j++) char_array_4[j] = 0;
                         char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
                         char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
                         char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-                        for (j = 0; (j < i - 1); j++) ret.push_back(char_array_3[j]);
+                        for (int j = 0; j < i - 1; j++) ret.push_back(char_array_3[j]);
                     }
                     return ret;
                 };
@@ -1114,7 +1122,10 @@ static void init_webserver() {
         html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css'>";
         html += "<style>body{background:#121212;color:white}.card{background:#1e1e1e;border:1px solid #333;color:white;margin-bottom:15px}.btn-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:15px}.btn-del{padding:0 5px;color:#ff4444;cursor:pointer;border:none;background:none}.hidden-card{display:none} .icon-select{font-family: 'Font Awesome 6 Free', 'FontAwesome', sans-serif; font-weight: 900;} .combo-builder{background:#2a2a2a; border-radius:4px; padding:5px; margin-top:5px; border:1px solid #444;}</style>";
         html += "</head><body class='container py-4'>";
-        html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>" + String(l->dash_title) + "</h2>";
+        html += "<div class='d-flex justify-content-between align-items-center mb-4'><h2>" + String(l->dash_title);
+        html += " <span class='badge bg-secondary' style='font-size:0.5em'>v";
+        html += PANDA_VERSION;
+        html += "</span></h2>";
         html += "<div class='d-flex align-items-center gap-3'><div class='d-flex align-items-center gap-2'><label>" + String(l->kb_label) + "</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Español</option></select></div>";
         html += "<div class='d-flex align-items-center gap-2'><label>" + String(l->os_label) + "</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select><input type='hidden' id='osInput' name='os' form='configForm'></div>";
         html += "<div class='d-flex align-items-center gap-2'><label>" + String(l->grid_label) + "</label><select id='gridSelect' class='form-select form-select-sm' style='width:100px'><option value='2x2'>2x2</option><option value='3x2'>3x2</option><option value='3x3'>3x3</option><option value='4x3'>4x3</option><option value='5x3'>5x3</option></select><input type='hidden' id='rowsInput' name='rows' form='configForm'><input type='hidden' id='colsInput' name='cols' form='configForm'></div>";
@@ -1155,22 +1166,30 @@ static void init_webserver() {
             html += "</div>";
         }
         html += "</div><button type='submit' class='btn btn-primary mt-3 w-100'>" + String(l->save_changes) + "</button></form></div></div>";
+
+        // Right Column: Backup, Firmware, then Library
+        html += "<div class='col-md-3'>";
         
-        html += "<div class='col-md-3'><div class='card p-3'><h5>" + String(l->library) + "</h5>";
-        html += "<input type='file' id='fileInput' class='form-control form-control-sm mb-2'><button onclick='upload()' class='btn btn-sm btn-success w-100 mb-3'>" + String(l->upload) + "</button>";
-        html += "<ul id='fileList' class='list-group list-group-flush small'></ul></div>";
-        html += "</div>";
-        html += "<div class='card p-3 mt-3'><h5>" + String(l->backup_title) + "</h5>";
+        // Backup
+        html += "<div class='card p-3 mb-3'><h5>" + String(l->backup_title) + "</h5>";
         html += "<button onclick='backup()' class='btn btn-sm btn-info w-100 mb-2'>" + String(l->backup_btn) + "</button>";
         html += "<input type='file' id='restoreInput' class='form-control form-control-sm mb-2' accept='.json'>";
         html += "<button onclick='restore()' class='btn btn-sm btn-danger w-100'>" + String(l->restore_btn) + "</button>";
         html += "</div>";
-        
-        html += "<div class='card p-3 mt-3'><h5>" + String(l->firmware_title) + "</h5>";
+
+        // Firmware
+        html += "<div class='card p-3 mb-3'><h5>" + String(l->firmware_title) + "</h5>";
         html += "<p class='small text-secondary'>" + String(l->firmware_info) + "</p>";
         html += "<input type='file' id='otaInput' class='form-control form-control-sm mb-2' accept='.bin'>";
         html += "<button onclick='updateFirmware()' class='btn btn-sm btn-warning w-100'>" + String(l->update_btn) + "</button>";
         html += "<div class='progress mt-2' style='height: 10px; display:none;' id='otaProgressContainer'><div id='otaProgressBar' class='progress-bar progress-bar-striped progress-bar-animated bg-warning' style='width: 0%'></div></div>";
+        html += "</div>";
+
+        // Library (now at bottom)
+        html += "<div class='card p-3'><h5>" + String(l->library) + "</h5>";
+        html += "<input type='file' id='fileInput' class='form-control form-control-sm mb-2'><button onclick='upload()' class='btn btn-sm btn-success w-100 mb-3'>" + String(l->upload) + "</button>";
+        html += "<ul id='fileList' class='list-group list-group-flush small'></ul></div>";
+        
         html += "</div></div></div>";
         
         html += "<script>";
@@ -1269,7 +1288,13 @@ static void init_webserver() {
         html += " xhr.send(fd);";
         html += "}";
         html += "load();</script></body></html>";
-        request->send(200, "text/html; charset=utf-8", html);
+        // Append HTML to response
+        // Send response with headers
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html; charset=utf-8", html);
+        response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response->addHeader("Pragma", "no-cache");
+        response->addHeader("Expires", "0");
+        request->send(response);
     });
 
     server.begin();
