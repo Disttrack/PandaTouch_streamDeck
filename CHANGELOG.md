@@ -2,7 +2,7 @@
 
 All improvements and changes made in this enhanced version.
 
-## [v1.4.1] - 2026-01-31
+## [v1.4.2] - 2026-01-31
 ### Bug Fixes
 - **Fix Boot Loop**: Resolved critical "Invalid image block" boot loop by synchronizing flash configuration.
 - **Build System Fix**: Fixed a massive discrepancy in GitHub Actions where the factory binary was being generated with `DIO` and `8MB` while the project required `QIO` and `16MB`. 
