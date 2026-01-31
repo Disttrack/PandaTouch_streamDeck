@@ -2,6 +2,12 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.4.1] - 2026-01-31
+### Bug Fixes
+- **Fix Boot Loop**: Resolved critical "Invalid image block" boot loop by switching flash mode to `DIO` (Dual I/O).
+- **Build System Fix**: Fixed a discrepancy in GitHub Actions where the factory binary was being generated with 8MB flash size instead of 16MB.
+- **Improved Hardware Compatibility**: Unified flash settings across `platformio.ini` and build scripts for 100% stable execution on all PandaTouch hardware batches.
+
 ## [v1.4.0] - 2026-01-30
 ### New Features
 - **Multi-language Support (EN/ES)**: Full localization system for both the web dashboard and the on-device display. Toggle between English and Spanish seamlessly.
