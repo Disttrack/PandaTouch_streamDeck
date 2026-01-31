@@ -54,7 +54,7 @@ jobs:
 
           python $ESPTOOL --chip esp32s3 merge_bin \
             -o factory.bin \
-            --flash_mode dio \
+            --flash_mode qio \
             --flash_freq 80m \
             --flash_size 16MB \
             0x0 .pio/build/pandatouch/bootloader.bin \
