@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "lvgl.h" 
 
-#define PANDA_VERSION "1.5.1"
+#define PANDA_VERSION "1.5.4"
 
 class StreamDeckApp {
 public:

@@ -2,7 +2,7 @@
 
 All improvements and changes made in this enhanced version.
 
-## [v1.5.3] - 2026-01-31
+## [v1.5.4] - 2026-01-31
 ### Bug Fixes
 - **Image Restore**: Fixed corruption issue when restoring custom images from backup thanks to a more robust Base64 decoder.
 
