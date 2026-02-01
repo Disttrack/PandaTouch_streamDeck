@@ -15,7 +15,23 @@ Transform your **BigTreeTech PandaTouch** into a powerful **native Bluetooth Str
 
 ---
 
-## �️ Installation Guide
+## ⚡ Important: v1.6.0 OTA Update Fix
+
+**If you are currently running v1.5.4 or earlier**, you **MUST update to v1.6.0 using USB cable and factory firmware**. This version includes critical fixes for OTA (Over-The-Air) firmware updates.
+
+**Why?** Previous versions had a bug where OTA updates would fail with "premature end" errors, making it impossible to update wirelessly. v1.6.0 fixes this issue completely, but to activate the fix, you need to flash it via USB first.
+
+### Steps to Update to v1.6.0:
+1. Download `pandatouch_v1.6.0_factory.bin` from the [Releases](https://github.com/Disttrack/PandaTouch_streamDeck/releases) page.
+2. Follow **Option A** or **Option B** below to flash the factory binary via USB-C.
+3. Once v1.6.0 is installed, all future updates can be done wirelessly from the Web Dashboard.
+
+> [!WARNING]
+> Do **NOT** use `firmware.bin` for this initial v1.6.0 update. Use **`factory.bin`** only.
+
+---
+
+## 🛠️ Installation Guide
 
 ### Introduction: Why Factory Binary?
 The original PandaTouch firmware uses a different partition layout than this project (required for OTA updates). Because of this, simply flashing the application (`firmware.bin`) **will not work** for the first installation and will cause a boot loop (restart cycle).
@@ -49,7 +65,7 @@ Recommended if you want to modify the code:
 
 ## 🔄 How to Update
 
-Once you have this firmware installed, you don't need cables for future versions:
+Once you have **v1.6.0 or later** installed, you don't need cables for future versions:
 
 1. Access the **Web Dashboard** by entering the device's IP address in your browser.
 2. In the right sidebar, find the **"Firmware OTA"** section.
@@ -58,6 +74,7 @@ Once you have this firmware installed, you don't need cables for future versions
 
 > [!NOTE]
 > For OTA updates, always use `firmware.bin`. The `factory.bin` is only needed for the initial installation via USB.
+> **v1.6.0+**: OTA updates are now stable and reliable. Previous versions had critical bugs - if you're on v1.5.4 or earlier, flash v1.6.0 via USB first.
 
 ---
 
