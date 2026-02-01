@@ -2,6 +2,10 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.5.1] - 2026-01-31
+### Bug Fixes
+- **Image Restore**: Fixed corruption issue when restoring custom images from backup thanks to a more robust Base64 decoder.
+
 ## [v1.5.0] - 2026-01-31
 ### Bug Fixes
 - **Definitive Hybrid Fix**: Successfully matched the original BTT firmware's 80MHz QIO/OPI performance.

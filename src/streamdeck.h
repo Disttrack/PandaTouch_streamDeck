@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include "lvgl.h" 
 
+#define PANDA_VERSION "1.5.1"
+
 class StreamDeckApp {
 public:
     static void setup();
