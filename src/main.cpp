@@ -10,7 +10,7 @@ void setup()
   // Enable Serial for debugging
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n=== PandaTouch StreamDeck " PANDA_VERSION " Starting ===");
+  Serial.println("\n\n=== PandaTouch StreamDeck Starting ===");
   
   pt_setup_display(PT_LVGL_RENDER_FULL_1);
   pt_set_backlight(50, true);
