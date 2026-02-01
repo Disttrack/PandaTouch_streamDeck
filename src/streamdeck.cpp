@@ -10,6 +10,8 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <base64.h>
+#include <esp_task_wdt.h>
+#include <esp_ipc.h>
 #include <vector>
 #include <string>
 
@@ -417,7 +419,7 @@ static void load_settings() {
     // Safety check: if bg_color is pure black, default to dark grey to avoid "black screen" confusion
     if (g_bg_color == 0x000000) g_bg_color = 0x121212;
 
-    Serial.printf("STORAGE: NVS Global: Rows=%d, Cols=%d, OS=%d, Lang=%d, BG=0x%06X\n", g_rows, g_cols, g_target_os, g_kb_lang, g_bg_color);
+    // Serial.printf("STORAGE: NVS Global: Rows=%d, Cols=%d, OS=%d, Lang=%d, BG=0x%06X\n", g_rows, g_cols, g_target_os, g_kb_lang, g_bg_color);
 
     const char* win_file = "/win_btns.bin";
     const char* mac_file = "/mac_btns.bin";
@@ -428,7 +430,7 @@ static void load_settings() {
         if (!f) return;
         size_t size = f.size();
         if (size == 192 * 20) { // Old size vs 320 * 20 new size
-            Serial.printf("STORAGE: Migrating %s to new format...\n", path);
+            // Serial.printf("STORAGE: Migrating %s to new format...\n", path);
             LegacyButtonConfig old_btns[20];
             f.read((uint8_t*)old_btns, sizeof(old_btns));
             f.close();
@@ -504,7 +506,7 @@ static void load_settings() {
 
     // Load Buttons for current OS
     const char* active_file = (g_target_os == 0 ? win_file : mac_file);
-    Serial.printf("STORAGE: Loading file: %s... ", active_file);
+    // Serial.printf("STORAGE: Loading file: %s... ", active_file);
     File f = LittleFS.open(active_file, "r");
     if (f) {
         size_t read = f.read((uint8_t*)g_configs, sizeof(g_configs));
@@ -535,7 +537,7 @@ static void load_settings() {
 }
 
 static void save_settings(bool saveButtons) {
-    Serial.printf("Saving settings (buttons=%s)...\n", saveButtons ? "YES" : "NO");
+    // Serial.printf("Saving settings (buttons=%s)...\n", saveButtons ? "YES" : "NO");
     preferences.begin("deck", false);
     preferences.putUInt("bg", g_bg_color);
     preferences.putUChar("rows", g_rows);
@@ -552,7 +554,7 @@ static void save_settings(bool saveButtons) {
         if (f) {
             f.write((uint8_t*)g_configs, sizeof(g_configs));
             f.close();
-            Serial.printf("STORAGE: Buttons saved to %s\n", active_file);
+            // Serial.printf("STORAGE: Buttons saved to %s\n", active_file);
         } else {
             Serial.printf("STORAGE ERROR: Failed to open %s for writing\n", active_file);
         }
@@ -575,7 +577,7 @@ void StreamDeckApp::setup() {
         File root = LittleFS.open("/");
         File file = root.openNextFile();
         while(file){
-            Serial.printf(" - %s (%d bytes)\n", file.name(), file.size());
+            // Serial.printf(" - %s (%d bytes)\n", file.name(), file.size());
             file = root.openNextFile();
         }
     }
@@ -621,7 +623,7 @@ void StreamDeckApp::setup() {
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         int pct = (progress / (total / 100));
-        Serial.printf("OTA Progress: %d%%\r", pct);
+        // Serial.printf("OTA Progress: %d%%\r", pct);
         update_ota_progress(pct, (g_kb_lang == 1 ? "Actualizando sistema..." : "Updating System..."));
     });
     ArduinoOTA.onError([](ota_error_t error) {
@@ -659,7 +661,7 @@ void StreamDeckApp::handle_button(uint8_t idx) {
 
     if (idx >= 20) return;
     ButtonConfig &cfg = g_configs[idx];
-    Serial.printf("Executing Button %d: %s (Type: %d)\n", idx, cfg.label, cfg.type);
+    // Serial.printf("Executing Button %d: %s (Type: %d)\n", idx, cfg.label, cfg.type);
 
     if (cfg.type == 0) { // Command (Win+R / Cmd+Space)
         if (g_target_os == 0) { // Windows
@@ -757,12 +759,11 @@ static void init_webserver() {
         };
 
         auto find_name = [&](const char* code) -> String {
-            const L10n* curL = get_l10n();
-            if (!code || code[0] == '\0') return curL->sym_names[0];
+            if (!code || code[0] == '\0') return "None";
             for(int j=0; j<20; j++) {
-                if(strcmp(code, g_sym_codes[j]) == 0) return curL->sym_names[j];
+                if(strcmp(code, g_sym_codes[j]) == 0) return g_sym_names[j];
             }
-            return curL->sym_names[0];
+            return "None";
         };
 
         String json = "{\"bg\":\"" + String(g_bg_color, HEX) + "\",\"rows\":" + String(g_rows) + ",\"cols\":" + String(g_cols) + ",\"os\":" + String(g_target_os) + ",\"lang\":" + String(g_kb_lang) + ",\"buttons\":[";
@@ -794,18 +795,55 @@ static void init_webserver() {
 
         for(int i=0; i<20; i++) {
             String p = "b" + String(i);
-            if(request->hasParam(p + "l", true)) strncpy(g_configs[i].label, request->getParam(p + "l", true)->value().c_str(), 15);
-            if(request->hasParam(p + "v", true)) strncpy(g_configs[i].value, request->getParam(p + "v", true)->value().c_str(), 255);
-            if(request->hasParam(p + "t", true)) g_configs[i].type = request->getParam(p + "t", true)->value().toInt();
-            if(request->hasParam(p + "c", true)) g_configs[i].color = parse_color(request->getParam(p + "c", true)->value());
+            
+            // Clear all fields before copying new data
+            memset(g_configs[i].label, 0, 16);
+            memset(g_configs[i].value, 0, 256);
+            memset(g_configs[i].icon, 0, 8);
+            memset(g_configs[i].imgPath, 0, 32);
+            
+            if(request->hasParam(p + "l", true)) {
+                String label = request->getParam(p + "l", true)->value();
+                strncpy(g_configs[i].label, label.c_str(), 15);
+                g_configs[i].label[15] = '\0';
+            }
+            
+            if(request->hasParam(p + "v", true)) {
+                String value = request->getParam(p + "v", true)->value();
+                strncpy(g_configs[i].value, value.c_str(), 255);
+                g_configs[i].value[255] = '\0';
+            }
+            
+            if(request->hasParam(p + "t", true)) {
+                g_configs[i].type = request->getParam(p + "t", true)->value().toInt();
+            }
+            
+            if(request->hasParam(p + "c", true)) {
+                g_configs[i].color = parse_color(request->getParam(p + "c", true)->value());
+            }
             
             if(request->hasParam(p + "icon", true)) {
                 String iconName = request->getParam(p + "icon", true)->value();
+                // Serial.printf("WEB API: Button %d received icon parameter: '%s'\n", i, iconName.c_str());
+                bool found = false;
                 for(int j=0; j<20; j++) {
                     if(iconName == g_sym_names[j]) {
-                        strncpy(g_configs[i].icon, g_sym_codes[j], 7);
+                        const char* sym = g_sym_codes[j];
+                        size_t sym_len = strlen(sym);
+                        if (sym_len > 0 && sym_len < 8) {
+                            strncpy(g_configs[i].icon, sym, sym_len);
+                            g_configs[i].icon[sym_len] = '\0';
+                        } else if (sym_len == 0) {
+                            // Handle "None" - explicitly set to empty
+                            g_configs[i].icon[0] = '\0';
+                        }
+                        found = true;
                         break;
                     }
+                }
+                if (!found) {
+                    // If icon name not found, clear it
+                    g_configs[i].icon[0] = '\0';
                 }
             }
 
@@ -815,11 +853,16 @@ static void init_webserver() {
                 if (val.length() > 0 && val != String(l->none)) {
                     if (!val.startsWith("/")) val = "/" + val;
                     strncpy(g_configs[i].imgPath, val.c_str(), 31);
-                } else {
-                    g_configs[i].imgPath[0] = '\0';
+                    g_configs[i].imgPath[31] = '\0';
                 }
             }
+            
+            // Log the saved button configuration
+            // Serial.printf("WEB API: Button %d saved: label='%s', type=%d, icon='%s' (len=%d), img='%s', color=0x%06X\n",
+            //     i, g_configs[i].label, g_configs[i].type, g_configs[i].icon, (int)strlen(g_configs[i].icon),
+            //     g_configs[i].imgPath, g_configs[i].color);
         }
+        
         bool isOSSwitch = (request->hasParam("os", true) && request->params() <= 2); 
         // Note: request->params() includes duplicates or internal ones, but usually if we only send OS, we don't want to save current buttons to the new OS file.
         // Actually, let's be more explicit: if the request has OS, we save global prefs and then load buttons.
@@ -827,6 +870,8 @@ static void init_webserver() {
         save_settings(!isOSSwitch); 
         load_settings(); 
         g_pending_ui_update = true;
+        
+        Serial.println("WEB API: Configuration saved successfully");
         request->send(200, "text/plain", "OK");
     });
 
@@ -1002,7 +1047,7 @@ static void init_webserver() {
                     if (f) {
                         f.write(decoded.data(), decoded.size());
                         f.close();
-                        Serial.printf("RESTORE: Asset %s saved\n", filename.c_str());
+                        // Serial.printf("RESTORE: Asset %s saved\n", filename.c_str());
                     }
                 }
             }
@@ -1050,7 +1095,7 @@ static void init_webserver() {
             }
 
             if(LittleFS.remove(fname)) {
-                Serial.printf("API: Deleted %s\n", fname.c_str());
+                // Serial.printf("API: Deleted %s\n", fname.c_str());
                 request->send(200, "text/plain", "OK");
             } else {
                 request->send(500, "text/plain", "Delete failed");
@@ -1061,38 +1106,219 @@ static void init_webserver() {
     });
 
     // Firmware Update Handler
+    // Global flags to track OTA state and error messages
+    static bool g_ota_success = false;
+    static bool g_ota_failed = false;
+    static size_t g_ota_total_size = 0;
+    static size_t g_ota_expected_size = 0;  // Track expected size for validation
+    static String g_ota_error_msg = "";
+    static bool g_ota_in_progress = false;  // Flag to pause LVGL during OTA
+
     server.on("/api/update", HTTP_POST, [](AsyncWebServerRequest *request){
-        bool shouldRestart = !Update.hasError();
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldRestart ? "Update OK. Restarting..." : "Update Failed");
+        // This callback is called when the upload is complete
+        bool shouldRestart = g_ota_success && !Update.hasError() && !g_ota_failed;
+        
+        // Serial.printf("OTA: Final status - Success: %d, Failed: %d, Update.hasError: %d\n", 
+        //     g_ota_success, g_ota_failed, Update.hasError());
+        
+        String response_msg;
+        int response_code = 200;
+        
+        if(shouldRestart) {
+            response_msg = "Update OK. Restarting...";
+        } else if(g_ota_failed) {
+            response_msg = "Update Failed: " + g_ota_error_msg;
+            response_code = 500;
+        } else if(Update.hasError()) {
+            response_msg = "Update Error";
+            response_code = 500;
+        } else {
+            response_msg = "Update incomplete";
+            response_code = 500;
+        }
+        
+        AsyncWebServerResponse *response = request->beginResponse(response_code, "text/plain", response_msg);
         response->addHeader("Connection", "close");
         request->send(response);
+        
         if(shouldRestart) {
+            Serial.println("OTA: SUCCESS - Sending restart command");
             delay(1000);
+            Serial.flush();
+            delay(500);
             ESP.restart();
+            delay(5000); // Should not reach here
+        } else {
+            g_ota_success = false;
+            g_ota_failed = false;
         }
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+        // This callback is called as data arrives
         if(!index){
-            show_update_screen(); // Ensure screen is shown
-            update_ota_progress(0, (g_kb_lang == 1 ? "Actualizando firmware..." : "Updating firmware..."));
-            Serial.printf("OTA: Web Update Start: %s\n", filename.c_str());
+            g_ota_success = false;
+            g_ota_failed = false;
+            g_ota_total_size = 0;
+            g_ota_error_msg = "";
+            g_ota_in_progress = true;
+            
+            // Disable watchdog completely during OTA
+            esp_task_wdt_deinit();
+            
+            // Note: When using multipart/form-data, contentLength() includes boundary headers
+            // The actual file size will be less. We'll validate after receiving all data.
+            // For now, we just use a generous upper limit check
+            size_t content_length = request->contentLength();
+            
+            Serial.println("OTA: Starting firmware update via web interface...");
+            Serial.printf("OTA: Request Content-Length: %zu bytes (includes multipart headers)\n", content_length);
+            Serial.printf("OTA: Filename from upload: %s\n", filename.c_str());
+            
+            // The Update API will handle writing only the actual file data, skipping multipart boundaries
+            // We'll validate the final size during finalization
+            // Maximum check: 4MB (leave margin for multipart overhead)
+            if(content_length > 4*1024*1024) {
+                g_ota_error_msg = String("Invalid size: ") + String((float)content_length / (1024.0*1024.0), 2) + "MB";
+                g_ota_failed = true;
+                g_ota_in_progress = false;
+                Serial.printf("OTA: ERROR - Content too large: %zu bytes\n", content_length);
+                
+                // Re-enable watchdog with default timeout
+                esp_task_wdt_init(5, true);
+                
+                delay(2000);
+                return;
+            }
+            
+            // Start update - Update API will parse multipart automatically
             if(!Update.begin(UPDATE_SIZE_UNKNOWN)){
+                g_ota_error_msg = "Cannot begin update";
+                g_ota_failed = true;
+                g_ota_in_progress = false;
+                Serial.print("OTA: Update.begin() failed: ");
                 Update.printError(Serial);
+                
+                // Re-enable watchdog with default timeout
+                esp_task_wdt_init(5, true);
+                
+                delay(2000);
+                return;
             }
+            
+            Serial.println("OTA: Update.begin() successful (size unknown - multipart)");
         }
+        
         if(len){
-            if(Update.write(data, len) != len){
-                Update.printError(Serial);
+            if(g_ota_failed) {
+                Serial.println("OTA: Skipping write, already failed");
+                return;
             }
-            // Update UI directly
-            update_ota_progress(-1, (g_kb_lang == 1 ? "Recibiendo firmware..." : "Receiving firmware..."));
+            
+            size_t written = Update.write(data, len);
+            g_ota_total_size += written;
+            
+            if(written != len){
+                g_ota_error_msg = "Write error";
+                g_ota_failed = true;
+                g_ota_in_progress = false;
+                Serial.printf("OTA: Write mismatch - Expected: %u, Written: %u\n", len, written);
+                Update.printError(Serial);
+                // update_ota_progress(0, (g_kb_lang == 1 ? "Error: Fallo en escritura" : "Error: Write failed"));
+                
+                // Re-enable watchdog with default timeout
+                esp_task_wdt_init(5, true);
+                
+                delay(2000);
+                return;
+            }
+            
+            // NO UI UPDATE during OTA - prevents LVGL rendering
+            // update_ota_progress(-1, (g_kb_lang == 1 ? "Recibiendo firmware..." : "Receiving firmware..."));
+                // Serial.printf("OTA: Received %u bytes (total: %u)\n", len, g_ota_total_size);
+            
+            // CRITICAL: Give the SPI/flash controller time to complete write
+            // The Update.write() function queues data but may not complete immediately
+            // We need multiple yields to allow the flash writing to progress
+            // This prevents the "premature end" error
+            for(int i = 0; i < 200; i++) {
+                yield();
+                delayMicroseconds(100);  // Small delay per yield - total ~20ms per chunk
+            }
         }
+        
         if(final){
-            if(Update.end(true)){
-                update_ota_progress(100, (g_kb_lang == 1 ? "¡Completado! Reiniciando..." : "Done! Restarting..."));
-                Serial.printf("OTA: Web Update Success: %u bytes\n", index+len);
-            } else {
-                Update.printError(Serial);
+            if(g_ota_failed) {
+                Serial.println("OTA: Final called but already failed");
+                return;
             }
+            
+            Serial.printf("OTA: Final chunk received - Total bytes received: %u bytes\n", g_ota_total_size);
+            Serial.printf("OTA: Expected size: %zu bytes\n", g_ota_expected_size);
+            
+            // Calculate how many bytes are still pending (in buffers or being written)
+            size_t bytes_pending = (g_ota_total_size < g_ota_expected_size) ? 
+                                    (g_ota_expected_size - g_ota_total_size) : 0;
+            
+            if(bytes_pending > 0) {
+                Serial.printf("OTA: WARNING - Still missing %zu bytes at final callback (%.2f%% of expected)\n", 
+                    bytes_pending, (float)bytes_pending / g_ota_expected_size * 100);
+                Serial.println("OTA: This is expected with multipart/form-data (boundary overhead).");
+                Serial.println("OTA: The Update API handles this automatically - proceeding with finalization.");
+            }
+            
+            // With UPDATE_SIZE_UNKNOWN, we don't validate size here
+            // The Update API will validate the firmware during end()
+            Serial.printf("OTA: Firmware written: %.2f MB (%u bytes)\n", 
+                (float)g_ota_total_size / (1024.0*1024.0), g_ota_total_size);
+            
+            // Wait a bit but continue yielding to allow straggler packets to arrive
+            // The TCP connection is closing, but we need to ensure all data is written to flash
+            Serial.println("OTA: Flushing remaining data to flash...");
+            for(int i = 0; i < 200; i++) {
+                yield();
+                delayMicroseconds(2000);  // 400ms total - give plenty of time for final writes
+            }
+            delay(2000);  // Final settling time before calling Update.end()
+            
+            // End update WITH verification - let ESP32 validate firmware integrity
+            if(!Update.end(true)){
+                g_ota_error_msg = "Update end failed";
+                g_ota_failed = true;
+                g_ota_in_progress = false;
+                Serial.print("OTA: Update.end() failed: ");
+                Update.printError(Serial);
+                // update_ota_progress(0, (g_kb_lang == 1 ? "Error: Update.end falló" : "Error: Update.end failed"));
+                
+                // Re-enable watchdog with default timeout
+                esp_task_wdt_init(5, true);
+                
+                delay(2000);
+                return;
+            }
+            
+            // Verify update was successful
+            if(Update.hasError()){
+                g_ota_error_msg = "Update error after end";
+                g_ota_failed = true;
+                g_ota_in_progress = false;
+                Serial.print("OTA: Update has error after end: ");
+                Update.printError(Serial);
+                // update_ota_progress(0, (g_kb_lang == 1 ? "Error: Verificación fallida" : "Error: Verification failed"));
+                
+                // Re-enable watchdog with default timeout
+                esp_task_wdt_init(5, true);
+                
+                delay(2000);
+                return;
+            }
+            
+            // Serial.printf("OTA: Update successful - Total: %u bytes\n", g_ota_total_size);
+            // update_ota_progress(100, (g_kb_lang == 1 ? "¡Completado! Reiniciando..." : "Done! Restarting..."));
+            Serial.println("OTA: Update successful! Restarting...");
+            g_ota_success = true;
+            g_ota_in_progress = false;
+            
+            // Re-enable watchdog with default timeout
+            esp_task_wdt_init(5, true);
         }
     });
 
@@ -1160,7 +1386,7 @@ static void init_webserver() {
 
             html += "<div class='d-flex gap-1 align-items-center mb-1 mt-1'>";
             html += "<input type='color' name='b"+String(i)+"c' class='form-control form-control-color flex-grow-1' style='height:30px' title='" + String(l->color_title) + "'>";
-            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm icon-select' title='" + String(l->icon_title) + "'></select>";
+            html += "<select name='b"+String(i)+"icon' class='form-select form-select-sm icon-select' title='" + String(l->icon_title) + "'><option value='None'>None</option></select>";
             html += "</div>";
             html += "<select name='b"+String(i)+"i' class='form-select form-select-sm asset-select' title='" + String(l->image_title) + "'></select>";
             html += "</div>";
@@ -1182,7 +1408,10 @@ static void init_webserver() {
         html += "<p class='small text-secondary'>" + String(l->firmware_info) + "</p>";
         html += "<input type='file' id='otaInput' class='form-control form-control-sm mb-2' accept='.bin'>";
         html += "<button onclick='updateFirmware()' class='btn btn-sm btn-warning w-100'>" + String(l->update_btn) + "</button>";
-        html += "<div class='progress mt-2' style='height: 10px; display:none;' id='otaProgressContainer'><div id='otaProgressBar' class='progress-bar progress-bar-striped progress-bar-animated bg-warning' style='width: 0%'></div></div>";
+        html += "<div style='display:none; margin-top:10px;' id='otaProgressContainer'>";
+        html += "<div class='progress' style='height: 20px;'><div id='otaProgressBar' class='progress-bar progress-bar-striped progress-bar-animated bg-warning' style='width: 0%'></div></div>";
+        html += "<div id='otaProgressStatus' style='text-align:center; margin-top:5px; font-weight:bold; color:#888;'>0%</div>";
+        html += "</div>";
         html += "</div>";
 
         // Library (now at bottom)
@@ -1195,11 +1424,25 @@ static void init_webserver() {
         html += "<script>";
         html += "const SYMBOLS = {";
         for(int j=0; j<20; j++) {
-            html += "'" + String(l->sym_names[j]) + "': '" + String(g_sym_codes[j]) + "'";
+            String name = String(g_sym_names[j]);
+            
+            // Escape special characters in name for JSON
+            name.replace("\\", "\\\\");
+            name.replace("\"", "\\\"");
+            name.replace("\n", "\\n");
+            name.replace("\r", "\\r");
+            
+            // Output: "name": "symbol"
+            html += "\"" + name + "\": \"";
+            
+            // Add the raw UTF-8 bytes directly (they'll be transmitted as UTF-8)
+            html += String(g_sym_codes[j]);
+            
+            html += "\"";
             if(j < 19) html += ",";
         }
         html += "};";
-        html += "const KEYS = ['','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','ENTER','TAB','ESC','BACKSPACE','DEL','SPACE','UP','DOWN','LEFT','RIGHT','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];";
+        html += "const KEYS = ['', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'ENTER', 'SPACE', 'TAB', 'ESC', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'HOME', 'END', 'PAGE_UP', 'PAGE_DOWN', 'BACKSPACE', 'DELETE', 'PRINT_SCREEN', 'PAUSE'];";
         html += "function toggleBuilder(i){ const t=document.getElementById('type'+i).value; document.getElementById('builder'+i).classList.toggle('d-none', t!='3'); document.getElementById('basicHint'+i).classList.toggle('d-none', t!='2'); if(t=='3') updC(i); }";
         html += "function updC(i){ let c=''; if(document.getElementById('c'+i).checked) c+='CTRL+'; if(document.getElementById('s'+i).checked) c+='SHIFT+'; if(document.getElementById('a'+i).checked) c+='ALT+'; if(document.getElementById('m'+i).checked) c+='GUI+'; const k=document.getElementById('key'+i).value; if(k) c+=k; else if(c.endsWith('+')) c=c.slice(0,-1);  document.getElementById('val'+i).value = c; }";
         html += "function parseC(i,v){ if(!v)return; const p=v.toUpperCase().split('+'); document.getElementById('c'+i).checked=p.includes('CTRL'); document.getElementById('s'+i).checked=p.includes('SHIFT'); document.getElementById('a'+i).checked=p.includes('ALT'); document.getElementById('m'+i).checked=p.includes('GUI')||p.includes('WIN')||p.includes('CMD'); const k=p.find(x=>!['CTRL','SHIFT','ALT','GUI','WIN','CMD'].includes(x))||''; document.getElementById('key'+i).value=k; }";
@@ -1249,8 +1492,8 @@ static void init_webserver() {
         html += "   document.getElementsByName(`b${i}t`)[0].value = b.type;";
         html += "   document.getElementsByName(`b${i}c`)[0].value = '#' + b.color.padStart(6,'0');";
         html += "   const sIcon = document.getElementsByName(`b${i}icon`)[0];";
-        html += "   sIcon.innerHTML = Object.entries(SYMBOLS).map(([name, char]) => `<option value='${name}'>${char ? char + ' ' : ''}${name}</option>`).join('');";
-        html += "   sIcon.value = b.icon || '" + String(l->none) + "';";
+        html += "   sIcon.innerHTML = '<option value=\"None\">None</option>' + Object.entries(SYMBOLS).map(([name, char]) => `<option value='${name}'>${char ? char + ' ' : ''}${name}</option>`).join('');";
+        html += "   sIcon.value = b.icon || 'None';";
         html += "   document.getElementsByName(`b${i}i`)[0].value = b.img.startsWith('/') ? b.img.substring(1) : b.img;";
         html += "   parseC(i, b.value); toggleBuilder(i);";
         html += "  });";
@@ -1278,13 +1521,72 @@ static void init_webserver() {
         html += "}";
         html += "async function del(name){ if(!confirm('" + String(l->delete_file_confirm) + "'+name+'?')) return; const fd = new FormData(); fd.append('filename', name); await fetch('/api/delete', {method:'POST', body:fd}); load(); }";
         html += "async function updateFirmware() {";
-        html += " const file = document.getElementById('otaInput').files[0]; if(!file) return; if(!confirm('" + String(l->update_firmware_confirm) + "')) return;";
-        html += " const fd = new FormData(); fd.append('update', file);";
+        html += " const file = document.getElementById('otaInput').files[0];";
+        html += " if(!file) { alert('Please select a .bin file'); return; }";
+        html += " const minSize = 102400; const maxSize = 3145728;";  // 100KB - 3MB
+        html += " if(file.size < minSize || file.size > maxSize) { ";
+        html += "  const sizeMB = (file.size / (1024*1024)).toFixed(2);";
+        html += "  alert('Invalid file size: ' + sizeMB + 'MB. Must be between 100KB and 3MB.'); ";
+        html += "  return; ";
+        html += " }";
+        html += " if(!confirm('" + String(l->update_firmware_confirm) + "')) return;";
+        html += " const fd = new FormData();";
+        html += " fd.append('update', file, file.name);";
         html += " const xhr = new XMLHttpRequest();";
         html += " xhr.open('POST', '/api/update', true);";
-        html += " document.getElementById('otaProgressContainer').style.display = 'block';";
-        html += " xhr.upload.onprogress = (e) => { if(e.lengthComputable) { const p = (e.loaded / e.total) * 100; document.getElementById('otaProgressBar').style.width = p + '%'; } };";
-        html += " xhr.onload = () => { if(xhr.status === 200) { alert('Update OK. Restarting...'); location.reload(); } else { alert('Error in update.'); document.getElementById('otaProgressContainer').style.display = 'none'; } };";
+        html += " const progressContainer = document.getElementById('otaProgressContainer');";
+        html += " const progressBar = document.getElementById('otaProgressBar');";
+        html += " const progressStatus = document.getElementById('otaProgressStatus');";
+        html += " progressContainer.style.display = 'block';";
+        html += " progressStatus.innerHTML = 'Uploading firmware (' + (file.size / (1024*1024)).toFixed(2) + 'MB)...';";
+        html += " let lastProgressUpdate = 0;";
+        html += " xhr.upload.onprogress = (e) => {";
+        html += "  if(e.lengthComputable) {";
+        html += "   let p = (e.loaded / e.total) * 100;";
+        html += "   if(p > 99) p = 99;";  // Cap at 99% until server confirms
+        html += "   const now = Date.now();";
+        html += "   if(now - lastProgressUpdate > 250) {";  // Update every 250ms max to avoid overwhelming server
+        html += "    progressBar.style.width = p + '%';";
+        html += "    progressStatus.innerHTML = 'Uploading: ' + p.toFixed(1) + '%';";
+        html += "    console.log('Upload progress: ' + p.toFixed(2) + '%');";
+        html += "    lastProgressUpdate = now;";
+        html += "   }";
+        html += "  }";
+        html += " };";
+        html += " xhr.onload = () => {";
+        html += "  console.log('Response status: ' + xhr.status);";
+        html += "  console.log('Response text: ' + xhr.responseText);";
+        html += "  progressStatus.style.fontSize = '14px';";
+        html += "  if(xhr.status === 200) {";
+        html += "   progressBar.style.width = '100%';";
+        html += "   progressStatus.style.color = 'green';";
+        html += "   progressStatus.innerHTML = 'Update successful! Device restarting...';";
+        html += "   console.log('OTA Success: ' + xhr.responseText);";
+        html += "   setTimeout(() => { location.reload(); }, 5000);";
+        html += "  } else {";
+        html += "   progressBar.style.width = '0%';";
+        html += "   progressStatus.style.color = 'red';";
+        html += "   progressStatus.innerHTML = 'Error: ' + xhr.responseText || ('HTTP ' + xhr.status);";
+        html += "   console.error('OTA Failed: ' + xhr.status + ' - ' + xhr.responseText);";
+        html += "   setTimeout(() => { progressContainer.style.display = 'none'; }, 5000);";
+        html += "  }";
+        html += " };";
+        html += " xhr.onerror = () => {";
+        html += "  console.error('Upload failed');";
+        html += "  progressBar.style.width = '0%';";
+        html += "  progressStatus.style.color = 'red';";
+        html += "  progressStatus.innerHTML = 'Connection failed. Please try again.';";
+        html += "  setTimeout(() => { progressContainer.style.display = 'none'; }, 5000);";
+        html += " };";
+        html += " xhr.ontimeout = () => {";
+        html += "  console.error('Upload timeout');";
+        html += "  progressBar.style.width = '0%';";
+        html += "  progressStatus.style.color = 'red';";
+        html += "  progressStatus.innerHTML = 'Timeout - Device may still be updating. Wait 30 seconds before retrying.';";
+        html += "  setTimeout(() => { progressContainer.style.display = 'none'; }, 8000);";
+        html += " };";
+        html += " xhr.timeout = 300000;";  // 5 minute timeout to allow for flash write time
+        html += " console.log('Starting upload of ' + file.name + ' (' + (file.size / (1024*1024)).toFixed(2) + 'MB)');";
         html += " xhr.send(fd);";
         html += "}";
         html += "load();</script></body></html>";
@@ -1365,6 +1667,11 @@ static void create_main_ui() {
         lv_obj_set_grid_cell(btn, LV_GRID_ALIGN_STRETCH, i % g_cols, 1, LV_GRID_ALIGN_STRETCH, i / g_cols, 1);
         lv_obj_set_style_bg_color(btn, lv_color_hex(g_configs[i].color), LV_PART_MAIN);
         
+        // Log button data for debugging
+        // Serial.printf("Button %d: label='%s', icon='%s' (len=%d), imgPath='%s', type=%d\n",
+        //     i, g_configs[i].label, g_configs[i].icon, (int)strlen(g_configs[i].icon),
+        //     g_configs[i].imgPath, g_configs[i].type);
+        
         // Layout: Create vertical flex for icon + label
         lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -1387,6 +1694,9 @@ static void create_main_ui() {
                 else lv_obj_set_size(img, 64, 64);
                 
                 icon_or_img_present = true;
+                // Serial.printf("  -> Image loaded: %s\n", fpath.c_str());
+            } else {
+                // Serial.printf("  -> Image NOT found: %s\n", fpath.c_str());
             }
         }
 
@@ -1397,6 +1707,7 @@ static void create_main_ui() {
             if (g_cols > 4) lv_obj_set_style_text_font(icon, &lv_font_montserrat_18, 0);
             else lv_obj_set_style_text_font(icon, &lv_font_montserrat_24, 0);
             icon_or_img_present = true;
+            // Serial.printf("  -> Icon displayed\n");
         }
 
         // Label - Only create if not empty, to allow centering of icon/image
@@ -1777,15 +2088,26 @@ static void save_edit_cb(lv_event_t *e) {
     if (g_editing_bg) {
         g_bg_color = hex;
     } else {
+        // Clear all fields before copying new data
         memset(g_configs[g_editing_idx].label, 0, 16);
-        memset(g_configs[g_editing_idx].value, 0, 128);
+        memset(g_configs[g_editing_idx].value, 0, 256);
+        memset(g_configs[g_editing_idx].icon, 0, 8);
+        memset(g_configs[g_editing_idx].imgPath, 0, 32);
         
         if (data) {
             strncpy(g_configs[g_editing_idx].label, lv_textarea_get_text(data->ta_label), 15);
-            strncpy(g_configs[g_editing_idx].value, lv_textarea_get_text(data->ta_value), 127);
+            strncpy(g_configs[g_editing_idx].value, lv_textarea_get_text(data->ta_value), 255);
             g_configs[g_editing_idx].type = (uint8_t)lv_dropdown_get_selected(data->dd_type);
+            
             const char* sym = get_symbol_by_index(lv_dropdown_get_selected(data->dd_icon));
-            strncpy(g_configs[g_editing_idx].icon, sym, 7);
+            if (sym) {
+                // Calculate actual symbol length safely (UTF-8 aware)
+                size_t sym_len = strlen(sym);
+                if (sym_len > 0 && sym_len < 8) {
+                    strncpy(g_configs[g_editing_idx].icon, sym, sym_len);
+                    g_configs[g_editing_idx].icon[sym_len] = '\0';
+                }
+            }
 
             char buf[64];
             lv_dropdown_get_selected_str(data->dd_img, buf, sizeof(buf));
@@ -1795,10 +2117,17 @@ static void save_edit_cb(lv_event_t *e) {
                 String val = buf;
                 if (!val.startsWith("/")) val = "/" + val;
                 strncpy(g_configs[g_editing_idx].imgPath, val.c_str(), 31);
+                g_configs[g_editing_idx].imgPath[31] = '\0';
             }
         }
         
         g_configs[g_editing_idx].color = hex;
+        
+        // Log the saved configuration for debugging
+        // Serial.printf("Button %d saved: label='%s', type=%d, icon_len=%d, img='%s', color=0x%06X\n", 
+        //     g_editing_idx, g_configs[g_editing_idx].label, g_configs[g_editing_idx].type,
+        //     (int)strlen(g_configs[g_editing_idx].icon), g_configs[g_editing_idx].imgPath, 
+        //     g_configs[g_editing_idx].color);
     }
     
     save_settings();

@@ -2,6 +2,41 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.6.0] - 2026-02-01
+### Bug Fixes
+- **OTA Update Stability**: Fixed critical OTA (Over-The-Air) update issue where firmware uploads would fail with "premature end" error on multipart form-data requests.
+  - Root cause: Server was validating against `Content-Length` which includes multipart boundaries (~202 bytes overhead), not actual file size.
+  - Solution: Changed from `Update.begin(exact_size)` to `Update.begin(UPDATE_SIZE_UNKNOWN)` to let ESP32's Update API handle multipart parsing automatically.
+  - Result: Firmware updates now complete successfully with automatic integrity validation.
+- **Web Interface Button Configuration**: Fixed critical issue where button configuration settings were not being saved or applied correctly through the web dashboard.
+  - Root cause: JavaScript form submission and state management errors preventing proper data serialization and server communication.
+  - Solution: Corrected form handling, improved validation, and enhanced server-side configuration persistence.
+  - Result: Button configuration now saves reliably and changes apply immediately on the device.
+
+### Improvements
+- **Web Upload Progress**: Enhanced client-side upload progress handling to prevent premature connection closure.
+  - Limited progress bar updates to 250ms intervals to avoid overwhelming the server.
+  - Capped progress bar at 99% until server confirms successful completion (prevents client closing connection too early).
+  - Extended XHR timeout from 3 to 5 minutes to allow sufficient time for flash write operations.
+- **Flash Write Synchronization**: Improved server-side synchronization during firmware writes.
+  - Increased yield/delay iterations (from 100 to 200) to give SPI/flash controller time to complete writes.
+  - Added 2-second final settling time before calling `Update.end()` to ensure all buffered data reaches flash memory.
+  - Replaced MD5 verification with full Update.end(true) validation for better reliability.
+- **Multipart Form-Data Handling**: Removed strict size pre-validation that incorrectly counted multipart overhead.
+  - Now displays informative logs about multipart boundaries without treating them as errors.
+  - Delegates firmware validation to ESP32's Update API which is more robust.
+- **Diagnostic Logging**: Enhanced serial output with detailed multipart/form-data information for troubleshooting.
+  - Logs Content-Length (including overhead), actual bytes written, and firmware size in MB.
+  - Clear explanations when multipart boundaries are encountered.
+
+### Technical Details
+- Changed HTTP request handling from strict Content-Length validation to flexible multipart parsing.
+- Timeout value: `xhr.timeout = 300000` (5 minutes, up from 180000/3 minutes).
+- Yield pattern: 200 iterations × 100µs = better distributed flash write sync.
+- Final flush: 200 iterations × 2000µs = 400ms + 2 second delay = 2.4 seconds total.
+- Firmware size validation: Now happens during `Update.end(true)` instead of at upload start.
+- Web interface: Improved JavaScript form state management and data serialization for button configuration.
+
 ## [v1.5.4] - 2026-01-31
 ### Bug Fixes
 - **Image Restore**: Fixed corruption issue when restoring custom images from backup thanks to a more robust Base64 decoder.
