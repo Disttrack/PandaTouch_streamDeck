@@ -1,17 +1,17 @@
 #include "pt/pt_display.h"
 #include "streamdeck.h"
+#include "storage.h"
+#include "ui_main.h"
 
 void setup()
 {
-  // Safety delay to allow USB to enumerate and Serial to connect
-  pinMode(21, OUTPUT); digitalWrite(21, 0); 
+  pinMode(21, OUTPUT); digitalWrite(21, 0);
   delay(3000);
-  
-  // Enable Serial for debugging
+
   Serial.begin(115200);
   delay(1000);
   Serial.println("\n\n=== PandaTouch StreamDeck Starting ===");
-  
+
   pt_setup_display(PT_LVGL_RENDER_FULL_1);
   pt_set_backlight(50, true);
   StreamDeckApp::setup();

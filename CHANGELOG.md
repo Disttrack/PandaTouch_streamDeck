@@ -2,6 +2,38 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.6.1] - 2026-05-08
+### New Features
+- **Codebase Modularization**: Complete refactor of monolithic `streamdeck.cpp` (2340 lines) into 7 focused modules with headers.
+  - `constants.h` – shared enums and limits (`MAX_BUTTONS 20`, `ButtonType`, `TargetOS`, `KbLang`)
+  - `storage.h/.cpp` – NVS + LittleFS config load/save/migrate
+  - `ble_actions.h/.cpp` – BLE keyboard, shortcuts, button actions
+  - `l10n.h/.cpp` – English/Spanish localization + FontAwesome symbol tables
+  - `ui_helpers.h/.cpp` – reusable selection screen component
+  - `ui_main.h/.cpp` – main screen + OTA update screen
+  - `ui_settings.h/.cpp` – settings/edit/wifi screens with callbacks
+  - `webserver.h/.cpp` + `webserver_html.h` – REST API + dashboard HTML
+  - `streamdeck.h/.cpp` – facade (~50 lines) delegating to modules
+- **Web Dashboard Icons**: Icon selector dropdowns now display all 20 FontAwesome symbols with preview characters.
+
+### Bug Fixes
+- **Restore Backup – Data Corruption** (critical): `load_settings()` was called inside the restore handler, overwriting all values parsed from the backup JSON with stale NVS data. Now reads only the active bin file directly.
+- **Restore Backup – HTTP 500**: ESPAsyncWebServer sends 500 when `_onRequest` is NULL. Restructured to request-handler + body-handler with body accumulated in `_tempObject`.
+- **Restore Backup – `String*` Cast UB** (critical): `_tempObject` was malloc'd as raw `char*` but cast to `String*`, causing undefined behavior. Fixed to proper `char*` with null-termination.
+- **Restore Backup – Memory Leak**: `_tempObject` was never freed after restore. Now properly freed in all exit paths.
+- **Boot – Config Not Loaded**: `load_settings()` was never called at startup. Added to `StreamDeckApp::setup()`.
+- **OS Migration – Data Loss**: `init_os_v4` migration overwrote existing `.bin` files even when they already existed. Now preserves existing files.
+- **Color Slider LVGL 9.x**: `color_slider_cb` now uses `lv_color_make(r,g,b)` instead of struct member assignment, fixing RGB565 compatibility.
+- **Toolchain Windows**: Renamed cross-compiler executables (added prefixed copies) to work around GCC 8.4.0 limitation on Windows.
+- **Icon Mapping in Restore**: Added case-insensitive icon-name to FontAwesome-code conversion in restore handler, matching `/api/save` behavior. Unknown names preserved raw for backwards compatibility.
+
+### Improvements
+- **Backup JSON**: Added `wifi_pass` to backup so WiFi credentials survive restore.
+- **Input Validation**: Rows/cols clamped to 1–5 in all layers (web API, NVS load, UI grid builder).
+- **Restore Size Limit**: Increased `MAX_RESTORE_SIZE` from 100KB to 512KB with matching frontend validation.
+- **Debug Logging**: Added detailed serial logs at every step of the restore process (chunks, JSON parse, NVS write, bin files, assets, icon mapping).
+- **LVGL Config Optimization**: Disabled unused widgets, reduced log level to WARN.
+
 ## [v1.6.0] - 2026-02-01
 ### Bug Fixes
 - **OTA Update Stability**: Fixed critical OTA (Over-The-Air) update issue where firmware uploads would fail with "premature end" error on multipart form-data requests.

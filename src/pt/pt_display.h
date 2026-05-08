@@ -48,53 +48,11 @@ typedef enum
 /* =========================
  *  Display / Touch Objects
  * ========================= */
-TAMC_GT911 pt_touchpanel(
-    PT_I2C0_SDA_PIN,
-    PT_I2C0_SCL_PIN,
-    PT_GT911_IRQ_PIN,
-    PT_GT911_RST_PIN,
-    std::max(PT_LCD_H_RES, 0),
-    std::max(PT_LCD_V_RES, 0));
-
-#if defined(ESP_ARDUINO_VERSION_MAJOR)
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-Arduino_ESP32RGBPanel pt_rgbpanel(
-    PT_LCD_DE_PIN, PT_LCD_VSYNC_PIN, PT_LCD_HSYNC_PIN, PT_LCD_PCLK_PIN,
-    // Data pins: R3-R7, G2-G7, B3-B7 (Correct RGB order)
-    PT_LCD_R3_PIN, PT_LCD_R4_PIN, PT_LCD_R5_PIN, PT_LCD_R6_PIN, PT_LCD_R7_PIN,
-    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
-    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
-    0 /* hsync_polarity */, PT_LCD_HSYNC_PULSE_WIDTH, PT_LCD_HSYNC_BACK_PORCH, PT_LCD_HSYNC_FRONT_PORCH,
-    0 /* vsync_polarity */, PT_LCD_VSYNC_PULSE_WIDTH, PT_LCD_VSYNC_BACK_PORCH, PT_LCD_VSYNC_FRONT_PORCH,
-    1 /* pclk_active_neg */,
-    PT_LCD_PCLK_HZ, false /* useBigEndian */,
-    0 /* de_idle_high */, 0 /* pclk_idle_high */, PT_LCD_RENDER_BOUNCE_LINES *PT_LCD_H_RES /* bounce_buffer_size_px */);
-#else
-Arduino_ESP32RGBPanel pt_rgbpanel(
-    PT_LCD_DE_PIN, PT_LCD_VSYNC_PIN, PT_LCD_HSYNC_PIN, PT_LCD_PCLK_PIN,
-    // Data pins: R3-R7, G2-G7, B3-B7 (Correct RGB order)
-    PT_LCD_R3_PIN, PT_LCD_R4_PIN, PT_LCD_R5_PIN, PT_LCD_R6_PIN, PT_LCD_R7_PIN,
-    PT_LCD_G2_PIN, PT_LCD_G3_PIN, PT_LCD_G4_PIN, PT_LCD_G5_PIN, PT_LCD_G6_PIN, PT_LCD_G7_PIN,
-    PT_LCD_B3_PIN, PT_LCD_B4_PIN, PT_LCD_B5_PIN, PT_LCD_B6_PIN, PT_LCD_B7_PIN,
-    0 /* hsync_polarity */, PT_LCD_HSYNC_PULSE_WIDTH, PT_LCD_HSYNC_BACK_PORCH, PT_LCD_HSYNC_FRONT_PORCH,
-    0 /* vsync_polarity */, PT_LCD_VSYNC_PULSE_WIDTH, PT_LCD_VSYNC_BACK_PORCH, PT_LCD_VSYNC_FRONT_PORCH,
-    1 /* pclk_active_neg */,
-    PT_LCD_PCLK_HZ, false /* useBigEndian */);
-#endif
-#else
-// Fallback if version macros not present
-#pragma message "ESP_ARDUINO_VERSION_MAJOR not defined — assume old core"
-#define USE_LCD_TEARING_FIX 0
-#endif
-
-Arduino_RGB_Display pt_gfx(PT_LCD_H_RES, PT_LCD_V_RES, &pt_rgbpanel, 0, true);
-
-/* =========================
- *  State / LVGL Buffers
- * ========================= */
-
-lv_color_t *pt_disp_draw_buf;
-lv_color_t *pt_disp_draw_buf2 = NULL; // optional second buffer for double-buffering
+extern TAMC_GT911 pt_touchpanel;
+extern Arduino_ESP32RGBPanel pt_rgbpanel;
+extern Arduino_RGB_Display pt_gfx;
+extern lv_color_t *pt_disp_draw_buf;
+extern lv_color_t *pt_disp_draw_buf2;
 
 /* =========================
  *  Backlight (LEDC) Config

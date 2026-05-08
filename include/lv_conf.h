@@ -229,7 +229,7 @@
     #endif
 
     /** Enable drawing complex gradients in software: linear at an angle, radial or conical */
-    #define LV_USE_DRAW_SW_COMPLEX_GRADIENTS    1
+    #define LV_USE_DRAW_SW_COMPLEX_GRADIENTS    0
 
 #endif
 
@@ -379,7 +379,7 @@
      *  - LV_LOG_LEVEL_ERROR    Log only critical issues, when system may fail.
      *  - LV_LOG_LEVEL_USER     Log only custom log messages added by the user.
      *  - LV_LOG_LEVEL_NONE     Do not log anything. */
-    #define LV_LOG_LEVEL LV_LOG_LEVEL_INFO
+    #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
 
     /** - 1: Print log with 'printf';
      *  - 0: User needs to register a callback with `lv_log_register_print_cb()`. */
@@ -392,22 +392,22 @@
 
     /** - 1: Enable printing timestamp;
      *  - 0: Disable printing timestamp. */
-    #define LV_LOG_USE_TIMESTAMP 1
+    #define LV_LOG_USE_TIMESTAMP 0
 
     /** - 1: Print file and line number of the log;
      *  - 0: Do not print file and line number of the log. */
-    #define LV_LOG_USE_FILE_LINE 1
+    #define LV_LOG_USE_FILE_LINE 0
 
-    /* Enable/disable LV_LOG_TRACE in modules that produces a huge number of logs. */
-    #define LV_LOG_TRACE_MEM        1   /**< Enable/disable trace logs in memory operations. */
-    #define LV_LOG_TRACE_TIMER      1   /**< Enable/disable trace logs in timer operations. */
-    #define LV_LOG_TRACE_INDEV      1   /**< Enable/disable trace logs in input device operations. */
-    #define LV_LOG_TRACE_DISP_REFR  1   /**< Enable/disable trace logs in display re-draw operations. */
-    #define LV_LOG_TRACE_EVENT      1   /**< Enable/disable trace logs in event dispatch logic. */
-    #define LV_LOG_TRACE_OBJ_CREATE 1   /**< Enable/disable trace logs in object creation (core `obj` creation plus every widget). */
-    #define LV_LOG_TRACE_LAYOUT     1   /**< Enable/disable trace logs in flex- and grid-layout operations. */
-    #define LV_LOG_TRACE_ANIM       1   /**< Enable/disable trace logs in animation logic. */
-    #define LV_LOG_TRACE_CACHE      1   /**< Enable/disable trace logs in cache operations. */
+    /* Disable all LV_LOG_TRACE for performance */
+    #define LV_LOG_TRACE_MEM        0
+    #define LV_LOG_TRACE_TIMER      0
+    #define LV_LOG_TRACE_INDEV      0
+    #define LV_LOG_TRACE_DISP_REFR  0
+    #define LV_LOG_TRACE_EVENT      0
+    #define LV_LOG_TRACE_OBJ_CREATE 0
+    #define LV_LOG_TRACE_LAYOUT     0
+    #define LV_LOG_TRACE_ANIM       0
+    #define LV_LOG_TRACE_CACHE      0
 #endif  /*LV_USE_LOG*/
 
 /*-------------
@@ -706,7 +706,7 @@
  * */
 #define LV_WIDGETS_HAS_DEFAULT_VALUE  1
 
-#define LV_USE_ANIMIMG    1
+#define LV_USE_ANIMIMG    0
 
 #define LV_USE_ARC        1
 
@@ -716,84 +716,67 @@
 
 #define LV_USE_BUTTONMATRIX  1
 
-#define LV_USE_CALENDAR   1
-#if LV_USE_CALENDAR
-    #define LV_CALENDAR_WEEK_STARTS_MONDAY 0
-    #if LV_CALENDAR_WEEK_STARTS_MONDAY
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"}
-    #else
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}
-    #endif
+#define LV_USE_CALENDAR   0
 
-    #define LV_CALENDAR_DEFAULT_MONTH_NAMES {"January", "February", "March",  "April", "May",  "June", "July", "August", "September", "October", "November", "December"}
-    #define LV_USE_CALENDAR_HEADER_ARROW 1
-    #define LV_USE_CALENDAR_HEADER_DROPDOWN 1
-    #define LV_USE_CALENDAR_CHINESE 0
-#endif  /*LV_USE_CALENDAR*/
+#define LV_USE_CANVAS     0
 
-#define LV_USE_CANVAS     1
+#define LV_USE_CHART      0
 
-#define LV_USE_CHART      1
+#define LV_USE_CHECKBOX   0
 
-#define LV_USE_CHECKBOX   1
+#define LV_USE_DROPDOWN   1
 
-#define LV_USE_DROPDOWN   1   /**< Requires: lv_label */
+#define LV_USE_IMAGE      1
 
-#define LV_USE_IMAGE      1   /**< Requires: lv_label */
-
-#define LV_USE_IMAGEBUTTON     1
+#define LV_USE_IMAGEBUTTON     0
 
 #define LV_USE_KEYBOARD   1
 
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
-    #define LV_LABEL_TEXT_SELECTION 1   /**< Enable selecting text of the label */
-    #define LV_LABEL_LONG_TXT_HINT 1    /**< Store some extra info in labels to speed up drawing of very long text */
-    #define LV_LABEL_WAIT_CHAR_COUNT 3  /**< The count of wait chart */
+    #define LV_LABEL_TEXT_SELECTION 0
+    #define LV_LABEL_LONG_TXT_HINT 0
+    #define LV_LABEL_WAIT_CHAR_COUNT 3
 #endif
 
-#define LV_USE_LED        1
+#define LV_USE_LED        0
 
-#define LV_USE_LINE       1
+#define LV_USE_LINE       0
 
 #define LV_USE_LIST       1
 
 #define LV_USE_LOTTIE     0  /**< Requires: lv_canvas, thorvg */
 
-#define LV_USE_MENU       1
+#define LV_USE_MENU       0
 
-#define LV_USE_MSGBOX     1
+#define LV_USE_MSGBOX     0
 
-#define LV_USE_ROLLER     1   /**< Requires: lv_label */
+#define LV_USE_ROLLER     0
 
-#define LV_USE_SCALE      1
+#define LV_USE_SCALE      0
 
-#define LV_USE_SLIDER     1   /**< Requires: lv_bar */
+#define LV_USE_SLIDER     1
 
-#define LV_USE_SPAN       1
-#if LV_USE_SPAN
-    /** A line of text can contain this maximum number of span descriptors. */
-    #define LV_SPAN_SNIPPET_STACK_SIZE 64
-#endif
+#define LV_USE_SPAN       0
 
-#define LV_USE_SPINBOX    1
+#define LV_USE_SPINBOX    0
 
 #define LV_USE_SPINNER    1
 
-#define LV_USE_SWITCH     1
+#define LV_USE_SWITCH     0
 
-#define LV_USE_TABLE      1
+#define LV_USE_TABLE      0
 
-#define LV_USE_TABVIEW    1
+#define LV_USE_TABVIEW    0
 
-#define LV_USE_TEXTAREA   1   /**< Requires: lv_label */
+#define LV_USE_TEXTAREA   1
 #if LV_USE_TEXTAREA != 0
-    #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500    /**< [ms] */
+    #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500
 #endif
 
-#define LV_USE_TILEVIEW   1
+#define LV_USE_TILEVIEW   0
 
-#define LV_USE_WIN        1
+#define LV_USE_WIN        0
 
 #define LV_USE_3DTEXTURE  0
 
@@ -816,10 +799,10 @@
 #endif /*LV_USE_THEME_DEFAULT*/
 
 /** A very simple theme that is a good starting point for a custom theme */
-#define LV_USE_THEME_SIMPLE 1
+#define LV_USE_THEME_SIMPLE 0
 
 /** A theme designed for monochrome displays */
-#define LV_USE_THEME_MONO 1
+#define LV_USE_THEME_MONO 0
 
 /*==================
  * LAYOUTS
@@ -1105,10 +1088,10 @@
 #define LV_USE_FRAGMENT 0
 
 /** 1: Support using images as font in label or span widgets */
-#define LV_USE_IMGFONT 1
+#define LV_USE_IMGFONT 0
 
 /** 1: Enable an observer pattern implementation */
-#define LV_USE_OBSERVER 1
+#define LV_USE_OBSERVER 0
 
 /** 1: Enable Pinyin input method
  *  - Requires: lv_keyboard */
