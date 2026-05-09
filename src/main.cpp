@@ -6,13 +6,13 @@
 void setup()
 {
   pinMode(21, OUTPUT); digitalWrite(21, 0);
-  delay(3000);
+  delay(500);
 
   Serial.begin(115200);
-  delay(1000);
+  delay(200);
   Serial.println("\n\n=== PandaTouch StreamDeck Starting ===");
 
-  pt_setup_display(PT_LVGL_RENDER_FULL_1);
+  pt_setup_display(PT_LVGL_RENDER_FULL_2);
   pt_set_backlight(50, true);
   StreamDeckApp::setup();
 }

@@ -2,6 +2,18 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.7.0] - 2026-05-09
+### Improvements
+- **Smart UI Refresh**: Main screen no longer does a full widget rebuild when returning from settings. Colors, labels, and icons update in-place, eliminating flicker.
+- **Faster Boot**: Reduced startup delays from 3s to 500ms for faster power-on.
+- **Higher LVGL Refresh Rate**: Display refresh period reduced from 33ms to 20ms (30→50 FPS) for smoother animations.
+- **Removed Blocking Delay**: Eliminated `delay(1)` from main loop for more responsive touch input.
+- **Security**: WiFi password removed from backup JSON. Restore no longer transfers credentials.
+
+### Bug Fixes
+- **Restore Handler UB** (critical): `_tempObject` was `malloc`'d as raw `char*` but cast to `String*`. Fixed to proper `char*` with null-termination.
+- **Restore Memory Leak**: `_tempObject` now freed in all exit paths (empty body, JSON parse error, success).
+
 ## [v1.6.1] - 2026-05-08
 ### New Features
 - **Codebase Modularization**: Complete refactor of monolithic `streamdeck.cpp` (2340 lines) into 7 focused modules with headers.

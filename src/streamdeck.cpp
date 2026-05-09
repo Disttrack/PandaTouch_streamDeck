@@ -55,8 +55,7 @@ void StreamDeckApp::loop() {
     }
 
     ArduinoOTA.handle();
-
-    delay(1);
+    yield();
 }
 
 void StreamDeckApp::handle_button(uint8_t idx) {

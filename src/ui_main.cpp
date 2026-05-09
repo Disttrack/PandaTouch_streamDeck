@@ -13,6 +13,13 @@ static lv_obj_t* g_update_bar = nullptr;
 static lv_obj_t* g_update_label = nullptr;
 static lv_obj_t* g_update_pct_label = nullptr;
 
+static lv_obj_t* g_btns[MAX_BUTTONS] = {nullptr};
+static lv_obj_t* g_btn_labels[MAX_BUTTONS] = {nullptr};
+static lv_obj_t* g_btn_icons[MAX_BUTTONS] = {nullptr};
+static lv_obj_t* g_grid = nullptr;
+static lv_obj_t* g_slider = nullptr;
+static lv_obj_t* g_settings_btn = nullptr;
+
 static void btn_event_cb(lv_event_t* e) {
     uint8_t idx = (uint8_t)(uintptr_t)lv_event_get_user_data(e);
     handle_button_action(idx);
@@ -31,6 +38,13 @@ static void settings_btn_cb(lv_event_t* e) {
 void create_main_ui() {
     lv_obj_clean(g_main_screen);
     lv_obj_set_style_bg_color(g_main_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
+
+    memset(g_btns, 0, sizeof(g_btns));
+    memset(g_btn_labels, 0, sizeof(g_btn_labels));
+    memset(g_btn_icons, 0, sizeof(g_btn_icons));
+    g_grid = nullptr;
+    g_slider = nullptr;
+    g_settings_btn = nullptr;
 
     static int32_t col_dsc[10];
     static int32_t row_dsc[10];
@@ -51,24 +65,26 @@ void create_main_ui() {
     row_dsc[g_rows] = 60;
     row_dsc[g_rows + 1] = LV_GRID_TEMPLATE_LAST;
 
-    lv_obj_t* grid = lv_obj_create(g_main_screen);
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-    lv_obj_set_size(grid, lv_pct(100), lv_pct(100));
-    lv_obj_center(grid);
-    lv_obj_set_style_bg_color(grid, lv_color_hex(g_bg_color), LV_PART_MAIN);
-    lv_obj_set_style_border_width(grid, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(grid, 10, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(grid, 10, LV_PART_MAIN);
+    g_grid = lv_obj_create(g_main_screen);
+    lv_obj_set_grid_dsc_array(g_grid, col_dsc, row_dsc);
+    lv_obj_set_size(g_grid, lv_pct(100), lv_pct(100));
+    lv_obj_center(g_grid);
+    lv_obj_set_style_bg_color(g_grid, lv_color_hex(g_bg_color), LV_PART_MAIN);
+    lv_obj_set_style_border_width(g_grid, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(g_grid, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_gap(g_grid, 10, LV_PART_MAIN);
 
     int btn_count = g_rows * g_cols;
     for (int i = 0; i < btn_count; i++) {
-        lv_obj_t* btn = lv_btn_create(grid);
+        lv_obj_t* btn = lv_btn_create(g_grid);
         lv_obj_set_grid_cell(btn, LV_GRID_ALIGN_STRETCH, i % g_cols, 1, LV_GRID_ALIGN_STRETCH, i / g_cols, 1);
         lv_obj_set_style_bg_color(btn, lv_color_hex(g_configs[i].color), LV_PART_MAIN);
 
         lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_row(btn, 5, 0);
+
+        g_btns[i] = btn;
 
         bool icon_or_img_present = false;
         if (g_configs[i].imgPath[0] != '\0') {
@@ -93,6 +109,7 @@ void create_main_ui() {
             lv_label_set_text(icon, g_configs[i].icon);
             if (g_cols > 4) lv_obj_set_style_text_font(icon, &lv_font_montserrat_18, 0);
             else lv_obj_set_style_text_font(icon, &lv_font_montserrat_24, 0);
+            g_btn_icons[i] = icon;
             icon_or_img_present = true;
         }
 
@@ -101,27 +118,49 @@ void create_main_ui() {
             lv_label_set_text(label, g_configs[i].label);
             if (g_cols > 4) lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
             else lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+            g_btn_labels[i] = label;
         }
 
         lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
     }
 
-    lv_obj_t* slider = lv_slider_create(grid);
-    lv_slider_set_range(slider, 10, 100);
-    lv_slider_set_value(slider, 50, LV_ANIM_OFF);
-    lv_obj_set_grid_cell(slider, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_CENTER, g_rows, 1);
-    lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    g_slider = lv_slider_create(g_grid);
+    lv_slider_set_range(g_slider, 10, 100);
+    lv_slider_set_value(g_slider, 50, LV_ANIM_OFF);
+    lv_obj_set_grid_cell(g_slider, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_CENTER, g_rows, 1);
+    lv_obj_add_event_cb(g_slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    g_wifi_label = lv_label_create(grid);
+    g_wifi_label = lv_label_create(g_grid);
     String wtxt = "\xEF\x87\xAB " + g_ip_addr;
     lv_label_set_text(g_wifi_label, wtxt.c_str());
     lv_obj_set_grid_cell(g_wifi_label, LV_GRID_ALIGN_CENTER, 1, (g_cols > 2 ? g_cols - 2 : 1), LV_GRID_ALIGN_CENTER, g_rows, 1);
 
-    lv_obj_t* set_btn = lv_btn_create(grid);
-    lv_obj_set_grid_cell(set_btn, LV_GRID_ALIGN_STRETCH, g_cols - 1, 1, LV_GRID_ALIGN_STRETCH, g_rows, 1);
-    lv_obj_t* set_label = lv_label_create(set_btn);
+    g_settings_btn = lv_btn_create(g_grid);
+    lv_obj_set_grid_cell(g_settings_btn, LV_GRID_ALIGN_STRETCH, g_cols - 1, 1, LV_GRID_ALIGN_STRETCH, g_rows, 1);
+    lv_obj_t* set_label = lv_label_create(g_settings_btn);
     lv_label_set_text(set_label, "\xEF\x80\x93 Config");
-    lv_obj_add_event_cb(set_btn, settings_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(g_settings_btn, settings_btn_cb, LV_EVENT_CLICKED, NULL);
+}
+
+void refresh_main_ui() {
+    if (!g_grid) {
+        create_main_ui();
+        return;
+    }
+
+    lv_obj_set_style_bg_color(g_main_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(g_grid, lv_color_hex(g_bg_color), LV_PART_MAIN);
+
+    int btn_count = g_rows * g_cols;
+    for (int i = 0; i < btn_count; i++) {
+        if (!g_btns[i]) continue;
+        lv_obj_set_style_bg_color(g_btns[i], lv_color_hex(g_configs[i].color), LV_PART_MAIN);
+        if (g_btn_labels[i]) lv_label_set_text(g_btn_labels[i], g_configs[i].label);
+        if (g_btn_icons[i]) lv_label_set_text(g_btn_icons[i], g_configs[i].icon);
+    }
+
+    String wtxt = "\xEF\x87\xAB " + g_ip_addr;
+    lv_label_set_text(g_wifi_label, wtxt.c_str());
 }
 
 void update_ota_progress(int pct, const char* msg) {
