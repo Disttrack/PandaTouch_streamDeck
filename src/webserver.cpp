@@ -232,6 +232,8 @@ void init_webserver() {
         save_settings(!isOSSwitch);
         load_settings();
 
+        g_pending_ui_update = true;
+
         Serial.println("WEB API: Configuration saved successfully");
         request->send(200, "text/plain", "OK");
     });
