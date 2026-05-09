@@ -2,9 +2,12 @@
 #include "streamdeck.h"
 #include "storage.h"
 #include "ui_main.h"
+#include "esp32-hal-cpu.h"
 
 void setup()
 {
+  setCpuFrequencyMhz(240);
+
   pinMode(21, OUTPUT); digitalWrite(21, 0);
   delay(500);
 
@@ -13,8 +16,8 @@ void setup()
   Serial.println("\n\n=== PandaTouch StreamDeck Starting ===");
 
   pt_setup_display(PT_LVGL_RENDER_FULL_2);
-  pt_set_backlight(50, true);
   StreamDeckApp::setup();
+  pt_set_backlight(g_brightness, true);
 }
 
 void set_brightness(uint8_t val) {

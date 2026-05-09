@@ -29,6 +29,8 @@ static void slider_event_cb(lv_event_t* e) {
     lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e);
     int32_t val = lv_slider_get_value(slider);
     pt_set_backlight((uint8_t)val, true);
+    g_brightness = (uint8_t)val;
+    save_settings(false);
 }
 
 static void settings_btn_cb(lv_event_t* e) {
@@ -126,7 +128,7 @@ void create_main_ui() {
 
     g_slider = lv_slider_create(g_grid);
     lv_slider_set_range(g_slider, 10, 100);
-    lv_slider_set_value(g_slider, 50, LV_ANIM_OFF);
+    lv_slider_set_value(g_slider, g_brightness, LV_ANIM_OFF);
     lv_obj_set_grid_cell(g_slider, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_CENTER, g_rows, 1);
     lv_obj_add_event_cb(g_slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 

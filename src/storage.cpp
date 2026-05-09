@@ -20,6 +20,7 @@ uint8_t g_target_os = OS_WINDOWS;
 char g_wifi_ssid[32] = "";
 char g_wifi_pass[64] = "";
 uint8_t g_kb_lang = LANG_US;
+uint8_t g_brightness = 50;
 String g_wifi_status = "Disconnected";
 String g_ip_addr = "0.0.0.0";
 
@@ -45,8 +46,11 @@ void load_settings() {
     g_target_os = preferences.getUChar("os", 0);
     g_kb_lang = preferences.getUChar("lang", 0);
     g_bg_color = preferences.getUInt("bg", 0x121212);
+    g_brightness = preferences.getUChar("bright", 50);
 
     if (g_bg_color == 0x000000) g_bg_color = 0x121212;
+    if (g_brightness < 1) g_brightness = 50;
+    if (g_brightness > 100) g_brightness = 100;
     if (g_rows < 1 || g_rows > 5) g_rows = 3;
     if (g_cols < 1 || g_cols > 5) g_cols = 3;
 
@@ -182,6 +186,7 @@ void load_settings() {
 void save_settings(bool saveButtons) {
     preferences.begin("deck", false);
     preferences.putUInt("bg", g_bg_color);
+    preferences.putUChar("bright", g_brightness);
     preferences.putUChar("rows", g_rows);
     preferences.putUChar("cols", g_cols);
     preferences.putUChar("os", g_target_os);

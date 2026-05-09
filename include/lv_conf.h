@@ -370,7 +370,7 @@
  *-----------*/
 
 /** Enable log module */
-#define LV_USE_LOG 1
+#define LV_USE_LOG 0
 #if LV_USE_LOG
     /** Set value to one of the following levels of logging detail:
      *  - LV_LOG_LEVEL_TRACE    Log detailed information.
@@ -416,8 +416,8 @@
 
 /* Enable assertion failures if an operation fails or invalid data is found.
  * If LV_USE_LOG is enabled, an error message will be printed on failure. */
-#define LV_USE_ASSERT_NULL          1   /**< Check if the parameter is NULL. (Very fast, recommended) */
-#define LV_USE_ASSERT_MALLOC        1   /**< Checks is the memory is successfully allocated or no. (Very fast, recommended) */
+#define LV_USE_ASSERT_NULL          0
+#define LV_USE_ASSERT_MALLOC        0
 #define LV_USE_ASSERT_STYLE         0   /**< Check if the styles are properly initialized. (Very fast, recommended) */
 #define LV_USE_ASSERT_MEM_INTEGRITY 0   /**< Check the integrity of `lv_mem` after critical operations. (Slow) */
 #define LV_USE_ASSERT_OBJ           0   /**< Check the object's type and existence (e.g. not deleted). (Slow) */
@@ -461,7 +461,7 @@
 
 /** Default number of image header cache entries. The cache is used to store the headers of images
  *  The main logic is like `LV_CACHE_DEF_SIZE` but for image headers. */
-#define LV_IMAGE_HEADER_CACHE_DEF_CNT 0
+#define LV_IMAGE_HEADER_CACHE_DEF_CNT 16
 
 /** Number of stops allowed per gradient. Increase this to allow more stops.
  *  This adds (sizeof(lv_color_t) + 1) bytes per additional stop. */
@@ -493,13 +493,13 @@
 * - lv_obj_stringify_id:    Return string-ified identifier, e.g. "button3".
 * - lv_obj_free_id:         Does nothing, as there is no memory allocation for the ID.
 * When disabled these functions needs to be implemented by the user.*/
-#define LV_USE_OBJ_ID_BUILTIN   1
+#define LV_USE_OBJ_ID_BUILTIN   0
 
 /** Use obj property set/get API. */
 #define LV_USE_OBJ_PROPERTY 0
 
 /** Enable property name support. */
-#define LV_USE_OBJ_PROPERTY_NAME 1
+#define LV_USE_OBJ_PROPERTY_NAME 0
 
 /* Use VG-Lite Simulator.
  * - Requires: LV_USE_THORVG_INTERNAL or LV_USE_THORVG_EXTERNAL */
@@ -1257,7 +1257,7 @@
 #define LV_USE_ST7735        0
 #define LV_USE_ST7789        0
 #define LV_USE_ST7796        0
-#define LV_USE_ILI9341       1
+#define LV_USE_ILI9341       0
 #define LV_USE_FT81X         0
 
 #if (LV_USE_ST7735 | LV_USE_ST7789 | LV_USE_ST7796 | LV_USE_ILI9341)
