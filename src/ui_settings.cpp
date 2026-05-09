@@ -310,7 +310,7 @@ static void os_selected(const char* txt) {
     save_settings(false);
     load_settings();
     lv_scr_load(g_main_screen);
-    create_main_ui();
+    refresh_main_ui();
 }
 
 static void lang_selected(const char* txt) {
@@ -319,7 +319,7 @@ static void lang_selected(const char* txt) {
 
     save_settings(false);
     lv_scr_load(g_main_screen);
-    create_main_ui();
+    refresh_main_ui();
 }
 
 // ========== Settings Button Callbacks ==========
@@ -357,7 +357,7 @@ static void edit_btn_select_cb(lv_event_t* e) {
 static void back_to_main_cb(lv_event_t* e) {
     g_editing_bg = false;
     lv_scr_load(g_main_screen);
-    create_main_ui();
+    refresh_main_ui();
 }
 
 static void save_wifi_cb(lv_event_t* e) {
@@ -369,7 +369,7 @@ static void save_wifi_cb(lv_event_t* e) {
     WiFi.begin(g_wifi_ssid, g_wifi_pass);
 
     lv_scr_load(g_main_screen);
-    create_main_ui();
+    refresh_main_ui();
 }
 
 static void color_slider_cb(lv_event_t* e) {
@@ -434,5 +434,5 @@ static void save_edit_cb(lv_event_t* e) {
     save_settings();
     g_editing_bg = false;
     lv_scr_load(g_main_screen);
-    create_main_ui();
+    refresh_main_ui();
 }

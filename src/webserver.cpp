@@ -1,6 +1,7 @@
 #include "webserver.h"
 #include "storage.h"
 #include "l10n.h"
+#include "ui_main.h"
 #include "webserver_html.h"
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -142,6 +143,10 @@ void check_wifi_status() {
             Serial.println("WiFi Disconnected.");
         }
         was_connected = is_connected;
+        if (g_wifi_label) {
+            String wtxt = "\xEF\x87\xAB " + g_ip_addr;
+            lv_label_set_text(g_wifi_label, wtxt.c_str());
+        }
     }
 }
 
@@ -227,6 +232,8 @@ void init_webserver() {
         save_settings(!isOSSwitch);
         load_settings();
 
+        g_pending_ui_update = true;
+
         Serial.println("WEB API: Configuration saved successfully");
         request->send(200, "text/plain", "OK");
     });
@@ -242,7 +249,6 @@ void init_webserver() {
         doc["os"] = g_target_os;
         doc["lang"] = g_kb_lang;
         doc["wifi_ssid"] = g_wifi_ssid;
-        doc["wifi_pass"] = g_wifi_pass;
 
         auto save_btns_to_json = [&](const char* path, const char* key) {
             ButtonConfig btns[MAX_BUTTONS];
@@ -332,8 +338,6 @@ void init_webserver() {
         if (!doc["os"].isNull()) { g_target_os = doc["os"]; Serial.printf("RESTORE: os=%u (%s)\n", g_target_os, g_target_os == OS_WINDOWS ? "Windows" : "macOS"); }
         if (!doc["lang"].isNull()) { g_kb_lang = doc["lang"]; Serial.printf("RESTORE: lang=%u\n", g_kb_lang); }
         if (!doc["wifi_ssid"].isNull()) { strncpy(g_wifi_ssid, doc["wifi_ssid"], 31); Serial.printf("RESTORE: wifi_ssid=%s\n", g_wifi_ssid); }
-        if (!doc["wifi_pass"].isNull()) { strncpy(g_wifi_pass, doc["wifi_pass"], 63); Serial.printf("RESTORE: wifi_pass=%s\n", g_wifi_pass); }
-        else { Serial.println("RESTORE: wifi_pass not in backup, keeping current"); }
 
         auto restore_btns = [&](JsonArray arr, const char* path) {
             Serial.printf("RESTORE: Writing %s with %u buttons\n", path, arr.size());
@@ -500,7 +504,9 @@ void init_webserver() {
         Serial.printf("RESTORE: Final values -> bg=#%06X rows=%u cols=%u os=%u lang=%u wifi_ssid=%s\n",
             g_bg_color, g_rows, g_cols, g_target_os, g_kb_lang, g_wifi_ssid);
 
-        Serial.println("RESTORE: Backup restored successfully");
+        Serial.println("RESTORE: Backup restored successfully, scheduling UI refresh");
+
+        g_pending_ui_update = true;
 
         free(body);
         request->_tempObject = NULL;

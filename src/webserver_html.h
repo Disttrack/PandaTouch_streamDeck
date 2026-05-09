@@ -26,7 +26,7 @@ body{background:#121212;color:white}
 <div class='d-flex align-items-center gap-2'><label id="lblKb">Keyboard:</label><select id='langSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>English</option><option value='1'>Espanol</option></select></div>
 <div class='d-flex align-items-center gap-2'><label id="lblOs">OS:</label><select id='osSelect' class='form-select form-select-sm' style='width:105px'><option value='0'>Windows</option><option value='1'>macOS</option></select></div>
 <div class='d-flex align-items-center gap-2'><label id="lblGrid">Grid:</label><select id='gridSelect' class='form-select form-select-sm' style='width:100px'><option value='2x2'>2x2</option><option value='3x2'>3x2</option><option value='3x3'>3x3</option><option value='4x3'>4x3</option><option value='5x3'>5x3</option></select></div>
-<div class='d-flex align-items-center gap-2'><label id="lblBg">Background:</label><input type='color' id='globalBg' class='form-control form-control-color' style='height:35px'></div>
+<div class='d-flex align-items-center gap-2'><label id="lblBg">Background:</label><input type='color' id='globalBg' name='bg' form='configForm' class='form-control form-control-color' style='height:35px'></div>
 </div></div>
 
 <div class='row'><div class='col-md-9'>
@@ -280,12 +280,12 @@ document.addEventListener('DOMContentLoaded',async()=>{
   container.appendChild(div);
  }
 
- const hiddenInputs=`
-  <input type='hidden' id='osInput' name='os'>
-  <input type='hidden' id='rowsInput' name='rows'>
-  <input type='hidden' id='colsInput' name='cols'>
- `;
- container.insertAdjacentHTML('beforebegin',hiddenInputs);
+  const hiddenInputs=`
+   <input type='hidden' id='osInput' name='os'>
+   <input type='hidden' id='rowsInput' name='rows'>
+   <input type='hidden' id='colsInput' name='cols'>
+  `;
+  container.insertAdjacentHTML('beforebegin',hiddenInputs);
 
  load();
 });

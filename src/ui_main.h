@@ -10,6 +10,7 @@ extern lv_obj_t* g_wifi_label;
 extern volatile bool g_pending_ui_update;
 
 void create_main_ui();
+void refresh_main_ui();
 void show_update_screen();
 void update_ota_progress(int pct, const char* msg);
 

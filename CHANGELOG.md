@@ -2,6 +2,23 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.7.0] - 2026-05-09
+### Improvements
+- **Double-Buffer FULL Rendering**: Switched from single-buffer to double-buffer FULL mode for tear-free, smoother display output.
+- **Higher LVGL Refresh Rate**: Display refresh period reduced from 33ms to 15ms (30→66 FPS) for maximum fluidity.
+- **Smart UI Refresh**: Main screen no longer does a full widget rebuild when returning from settings. Colors, labels, and icons update in-place, eliminating flicker.
+- **Faster Boot**: Reduced startup delays from 3s to 500ms for faster power-on.
+- **Cooperative Multitasking**: Added `yield()` to main loop so WiFi/BLE tasks get CPU time without blocking delays.
+- **Security**: WiFi password removed from backup JSON. Restore no longer transfers credentials.
+
+### Bug Fixes
+- **Web – Background Color Not Saving** (critical): The `#globalBg` color input was outside `<form>` and had no `name` attribute, so it was never included in FormData. Fixed with HTML5 `form` attribute and proper `name='bg'`.
+- **Web – Save Not Refreshing Device Display**: `/api/save` persisted to NVS but never triggered a UI rebuild. Now sets `g_pending_ui_update = true` so the display updates immediately.
+- **Restore – Changes Applied Only After Reboot**: Restore modified data but never refreshed the UI. Now sets `g_pending_ui_update = true` for instant display update.
+- **WiFi IP Not Updating on Display**: `check_wifi_status()` updated `g_ip_addr` but never updated the on-screen label. Now updates `g_wifi_label` text when WiFi connects/disconnects.
+- **Restore Handler UB** (critical): `_tempObject` was `malloc`'d as raw `char*` but cast to `String*`. Fixed to proper `char*` with null-termination.
+- **Restore Memory Leak**: `_tempObject` now freed in all exit paths (empty body, JSON parse error, success).
+
 ## [v1.6.1] - 2026-05-08
 ### New Features
 - **Codebase Modularization**: Complete refactor of monolithic `streamdeck.cpp` (2340 lines) into 7 focused modules with headers.
