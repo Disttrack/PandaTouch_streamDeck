@@ -583,6 +583,7 @@ void init_webserver() {
     static bool g_ota_success = false;
     static bool g_ota_failed = false;
     static size_t g_ota_total_size = 0;
+    static size_t g_ota_content_length = 0;
     static String g_ota_error_msg = "";
 
     server.on("/api/update", HTTP_POST, [](AsyncWebServerRequest* request) {
@@ -610,6 +611,7 @@ void init_webserver() {
 
         if (shouldRestart) {
             Serial.println("OTA: SUCCESS - Sending restart command");
+            g_ota_progress = -1;
             delay(1000);
             Serial.flush();
             delay(500);
@@ -617,22 +619,24 @@ void init_webserver() {
         } else {
             g_ota_success = false;
             g_ota_failed = false;
+            g_ota_progress = -1;
         }
     }, [](AsyncWebServerRequest* request, String filename, size_t index, uint8_t* data, size_t len, bool final) {
         if (!index) {
             g_ota_success = false;
             g_ota_failed = false;
             g_ota_total_size = 0;
+            g_ota_content_length = 0;
             g_ota_error_msg = "";
 
-            size_t content_length = request->contentLength();
+            g_ota_content_length = request->contentLength();
             Serial.println("OTA: Starting firmware update via web interface...");
-            Serial.printf("OTA: Request Content-Length: %zu bytes\n", content_length);
+            Serial.printf("OTA: Request Content-Length: %zu bytes\n", g_ota_content_length);
 
-            if (content_length > 4 * 1024 * 1024) {
-                g_ota_error_msg = String("Invalid size: ") + String((float)content_length / (1024.0 * 1024.0), 2) + "MB";
+            if (g_ota_content_length > 4 * 1024 * 1024) {
+                g_ota_error_msg = String("Invalid size: ") + String((float)g_ota_content_length / (1024.0 * 1024.0), 2) + "MB";
                 g_ota_failed = true;
-                Serial.printf("OTA: ERROR - Content too large: %zu bytes\n", content_length);
+                Serial.printf("OTA: ERROR - Content too large: %zu bytes\n", g_ota_content_length);
                 delay(2000);
                 return;
             }
@@ -646,6 +650,8 @@ void init_webserver() {
                 return;
             }
 
+            g_ota_screen_requested = true;
+            g_ota_progress = 0;
             Serial.println("OTA: Update.begin() successful (size unknown - multipart)");
         }
 
@@ -657,6 +663,11 @@ void init_webserver() {
 
             size_t written = Update.write(data, len);
             g_ota_total_size += written;
+
+            if (g_ota_content_length > 0) {
+                g_ota_progress = (g_ota_total_size * 100) / g_ota_content_length;
+                if (g_ota_progress > 99) g_ota_progress = 99;
+            }
 
             if (written != len) {
                 g_ota_error_msg = "Write error";
@@ -705,6 +716,7 @@ void init_webserver() {
                 return;
             }
 
+            g_ota_progress = 100;
             Serial.println("OTA: Update successful! Restarting...");
             g_ota_success = true;
         }

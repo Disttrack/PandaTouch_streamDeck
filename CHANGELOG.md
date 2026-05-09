@@ -2,6 +2,23 @@
 
 All improvements and changes made in this enhanced version.
 
+## [v1.7.1] - 2026-05-09 (current)
+### New Features
+- **Brightness Persistence**: Backlight level is now saved to NVS and restored on boot. Slider initializes to the stored value instead of hardcoded 50%.
+- **OTA Display Support**: Firmware updates via web dashboard now show a static "Updating... Please wait, do not power off" message rendered directly to the display using the GFX library (DRAM-based, no PSRAM DMA interference during flash writes).
+
+### Optimizations
+- **LVGL Config Tuning**: Disabled LOG, ASSERT_NULL, ASSERT_MALLOC, OBJ_ID_BUILTIN, OBJ_PROPERTY_NAME, and ILI9341 driver — reduces flash footprint and removes runtime overhead from hot paths.
+- **Image Header Cache**: Enabled `LV_IMAGE_HEADER_CACHE_DEF_CNT 16` to cache image metadata and avoid repeated LittleFS reads.
+- **CPU Frequency**: Forced ESP32-S3 to 240MHz via `setCpuFrequencyMhz(240)` in setup.
+- **OTA Display Stability**: During firmware updates, LVGL display buffers are freed and `lv_task_handler()` is suspended, eliminating pixel readback contetion on the shared SPI1 bus (flash + PSRAM).
+
+### Bug Fixes
+- **Brightness Not Persisting** (fixed): `pt_set_backlight()` was called before `load_settings()`, so the NVS value was overwritten by the hardcoded default. Reordered in main.cpp.
+- **Brightness Slider Default** (fixed): Slider value was hardcoded to 50 regardless of saved brightness. Now reads `g_brightness`.
+- **OTA Screen Invisible** (fixed): `/api/update` handler never triggered `show_update_screen()`. Added volatile flags checked in the main loop.
+- **Display Glitches During OTA** (fixed): LCD DMA reading from PSRAM during flash writes caused severe artifacts. Switched to direct GFX drawing using DRAM line buffers and suspended LVGL rendering.
+
 ## [v1.7.0] - 2026-05-09
 ### Improvements
 - **Double-Buffer FULL Rendering**: Switched from single-buffer to double-buffer FULL mode for tear-free, smoother display output.

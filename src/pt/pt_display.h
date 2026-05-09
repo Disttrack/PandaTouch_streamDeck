@@ -53,6 +53,7 @@ extern Arduino_ESP32RGBPanel pt_rgbpanel;
 extern Arduino_RGB_Display pt_gfx;
 extern lv_color_t *pt_disp_draw_buf;
 extern lv_color_t *pt_disp_draw_buf2;
+extern volatile bool pt_display_suspended;
 
 /* =========================
  *  Backlight (LEDC) Config
@@ -340,9 +341,28 @@ inline void pt_setup_display(PT_LVGL_render_method_t mode = (PT_LVGL_render_meth
  * This function is called repeatedly to handle
  * refreshing the screen and processing input events.
  */
+extern volatile bool pt_display_suspended;
+
 inline void pt_loop_display()
 {
-  lv_task_handler();
+  if (!pt_display_suspended) lv_task_handler();
+}
+
+inline void pt_enter_ota_mode()
+{
+  if (pt_disp_draw_buf) { free(pt_disp_draw_buf); pt_disp_draw_buf = NULL; }
+  if (pt_disp_draw_buf2) { free(pt_disp_draw_buf2); pt_disp_draw_buf2 = NULL; }
+
+  pt_gfx.fillScreen(0x000000);
+  pt_gfx.setTextColor(0xFFFFFF);
+  pt_gfx.setTextSize(3);
+  pt_gfx.setCursor(200, 200);
+  pt_gfx.print("Updating...");
+  pt_gfx.setTextSize(2);
+  pt_gfx.setCursor(160, 250);
+  pt_gfx.print("Please wait, do not power off");
+
+  pt_display_suspended = true;
 }
 
 #endif // PT_DISPLAY_H

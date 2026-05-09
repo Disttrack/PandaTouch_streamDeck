@@ -4,6 +4,7 @@
 #include "ble_actions.h"
 #include "webserver.h"
 #include "l10n.h"
+#include "pt/pt_display.h"
 #include <ArduinoOTA.h>
 
 void StreamDeckApp::setup() {
@@ -21,17 +22,15 @@ void StreamDeckApp::setup() {
     init_ble();
 
     ArduinoOTA.onStart([]() {
-        show_update_screen();
+        pt_enter_ota_mode();
         String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
         Serial.println("OTA: Start updating " + type);
     });
     ArduinoOTA.onEnd([]() {
-        update_ota_progress(100, "Update Complete!");
         Serial.println("\nOTA: Update Complete");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        int pct = (progress / (total / 100));
-        update_ota_progress(pct, "Updating System...");
+        (void)progress; (void)total;
     });
     ArduinoOTA.onError([](ota_error_t error) {
         Serial.printf("OTA Error[%u]: ", error);
@@ -52,6 +51,11 @@ void StreamDeckApp::loop() {
         g_pending_ui_update = false;
         lv_scr_load(g_main_screen);
         create_main_ui();
+    }
+
+    if (g_ota_screen_requested) {
+        g_ota_screen_requested = false;
+        pt_enter_ota_mode();
     }
 
     ArduinoOTA.handle();

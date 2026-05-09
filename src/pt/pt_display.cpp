@@ -37,3 +37,4 @@ Arduino_RGB_Display pt_gfx(PT_LCD_H_RES, PT_LCD_V_RES, &pt_rgbpanel, 0, true);
 
 lv_color_t *pt_disp_draw_buf;
 lv_color_t *pt_disp_draw_buf2 = NULL;
+volatile bool pt_display_suspended = false;

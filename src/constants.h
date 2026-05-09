@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define MAX_BUTTONS 20
-#define PANDA_VERSION "1.7.0"
+#define PANDA_VERSION "1.7.1"
 
 enum ButtonType {
     BTN_TYPE_APP = 0,

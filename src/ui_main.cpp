@@ -7,6 +7,8 @@
 lv_obj_t* g_main_screen = nullptr;
 lv_obj_t* g_wifi_label = nullptr;
 volatile bool g_pending_ui_update = false;
+volatile bool g_ota_screen_requested = false;
+volatile int g_ota_progress = -1;
 
 static lv_obj_t* g_update_screen = nullptr;
 static lv_obj_t* g_update_bar = nullptr;
