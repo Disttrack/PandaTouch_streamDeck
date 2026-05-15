@@ -3,12 +3,17 @@
 #include "ble_actions.h"
 #include "pt/pt_display.h"
 #include <LittleFS.h>
+#include <esp_task_wdt.h>
 
 lv_obj_t* g_main_screen = nullptr;
 lv_obj_t* g_wifi_label = nullptr;
 volatile bool g_pending_ui_update = false;
 volatile bool g_ota_screen_requested = false;
 volatile int g_ota_progress = -1;
+
+uint32_t g_dirty_buttons_mask = 0;
+bool g_dirty_bg = false;
+bool g_dirty_layout = false;
 
 static lv_obj_t* g_update_screen = nullptr;
 static lv_obj_t* g_update_bar = nullptr;
@@ -146,25 +151,45 @@ void create_main_ui() {
     lv_obj_add_event_cb(g_settings_btn, settings_btn_cb, LV_EVENT_CLICKED, NULL);
 }
 
+void mark_all_dirty() {
+    g_dirty_buttons_mask = (MAX_BUTTONS < 32) ? ((1u << MAX_BUTTONS) - 1) : 0xFFFFFFFF;
+    g_dirty_bg = true;
+    g_dirty_layout = true;
+}
+
 void refresh_main_ui() {
-    if (!g_grid) {
+    if (!g_grid || g_dirty_layout) {
         create_main_ui();
+        g_dirty_buttons_mask = 0;
+        g_dirty_bg = false;
+        g_dirty_layout = false;
         return;
     }
 
-    lv_obj_set_style_bg_color(g_main_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(g_grid, lv_color_hex(g_bg_color), LV_PART_MAIN);
+    if (g_dirty_bg) {
+        lv_obj_set_style_bg_color(g_main_screen, lv_color_hex(g_bg_color), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_grid, lv_color_hex(g_bg_color), LV_PART_MAIN);
+        g_dirty_bg = false;
+    }
 
     int btn_count = g_rows * g_cols;
     for (int i = 0; i < btn_count; i++) {
+        if (!(g_dirty_buttons_mask & (1u << i))) continue;
         if (!g_btns[i]) continue;
         lv_obj_set_style_bg_color(g_btns[i], lv_color_hex(g_configs[i].color), LV_PART_MAIN);
         if (g_btn_labels[i]) lv_label_set_text(g_btn_labels[i], g_configs[i].label);
         if (g_btn_icons[i]) lv_label_set_text(g_btn_icons[i], g_configs[i].icon);
     }
+    g_dirty_buttons_mask = 0;
 
     String wtxt = "\xEF\x87\xAB " + g_ip_addr;
     lv_label_set_text(g_wifi_label, wtxt.c_str());
+}
+
+void io_yield() {
+    lv_timer_handler();
+    yield();
+    esp_task_wdt_reset();
 }
 
 void update_ota_progress(int pct, const char* msg) {

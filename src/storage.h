@@ -30,4 +30,8 @@ void init_storage();
 void load_settings();
 void save_settings(bool saveButtons = true);
 
+// Batch mode guard: prevents UI glitches during bulk writes.
+// Returns the previous state. Enter batch by passing true; exit by passing false.
+bool set_pending_redundant_write(bool entering);
+
 #endif

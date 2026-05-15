@@ -206,3 +206,11 @@ void save_settings(bool saveButtons) {
         }
     }
 }
+
+static bool g_batch_write_active = false;
+
+bool set_pending_redundant_write(bool entering) {
+    bool prev = g_batch_write_active;
+    g_batch_write_active = entering;
+    return prev;
+}

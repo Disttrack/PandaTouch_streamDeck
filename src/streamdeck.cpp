@@ -49,8 +49,7 @@ void StreamDeckApp::loop() {
 
     if (g_pending_ui_update) {
         g_pending_ui_update = false;
-        lv_scr_load(g_main_screen);
-        create_main_ui();
+        refresh_main_ui();
     }
 
     if (g_ota_screen_requested) {

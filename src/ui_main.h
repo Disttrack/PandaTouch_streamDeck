@@ -16,4 +16,12 @@ void refresh_main_ui();
 void show_update_screen();
 void update_ota_progress(int pct, const char* msg);
 
+// Dirty region tracking
+extern uint32_t g_dirty_buttons_mask;
+extern bool g_dirty_bg;
+extern bool g_dirty_layout;
+
+void mark_all_dirty();
+void io_yield();
+
 #endif

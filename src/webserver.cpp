@@ -168,8 +168,10 @@ void init_webserver() {
         if (request->hasParam("os", true)) g_target_os = request->getParam("os", true)->value().toInt();
         if (request->hasParam("lang", true)) g_kb_lang = request->getParam("lang", true)->value().toInt();
 
+        uint32_t changed_mask = 0;
         for (int i = 0; i < MAX_BUTTONS; i++) {
             String p = "b" + String(i);
+            bool changed = false;
 
             memset(g_configs[i].label, 0, 16);
             memset(g_configs[i].value, 0, 256);
@@ -180,20 +182,24 @@ void init_webserver() {
                 String label = request->getParam(p + "l", true)->value();
                 strncpy(g_configs[i].label, label.c_str(), 15);
                 g_configs[i].label[15] = '\0';
+                changed = true;
             }
 
             if (request->hasParam(p + "v", true)) {
                 String value = request->getParam(p + "v", true)->value();
                 strncpy(g_configs[i].value, value.c_str(), 255);
                 g_configs[i].value[255] = '\0';
+                changed = true;
             }
 
             if (request->hasParam(p + "t", true)) {
                 g_configs[i].type = request->getParam(p + "t", true)->value().toInt();
+                changed = true;
             }
 
             if (request->hasParam(p + "c", true)) {
                 g_configs[i].color = parse_color(request->getParam(p + "c", true)->value());
+                changed = true;
             }
 
             if (request->hasParam(p + "icon", true)) {
@@ -216,6 +222,7 @@ void init_webserver() {
                 if (!found) {
                     g_configs[i].icon[0] = '\0';
                 }
+                changed = true;
             }
 
             if (request->hasParam(p + "i", true)) {
@@ -225,13 +232,25 @@ void init_webserver() {
                     strncpy(g_configs[i].imgPath, val.c_str(), 31);
                     g_configs[i].imgPath[31] = '\0';
                 }
+                changed = true;
             }
+
+            if (changed && i < 32) changed_mask |= (1u << i);
         }
 
         bool isOSSwitch = (request->hasParam("os", true) && request->params() <= 2);
-        save_settings(!isOSSwitch);
-        load_settings();
 
+        if (!set_pending_redundant_write(true)) {
+            save_settings(!isOSSwitch);
+            load_settings();
+            set_pending_redundant_write(false);
+        } else {
+            save_settings(!isOSSwitch);
+        }
+
+        g_dirty_buttons_mask = changed_mask;
+        g_dirty_bg = request->hasParam("bg", true);
+        g_dirty_layout = request->hasParam("rows", true) || request->hasParam("cols", true);
         g_pending_ui_update = true;
 
         Serial.println("WEB API: Configuration saved successfully");
@@ -239,6 +258,7 @@ void init_webserver() {
     });
 
     server.on("/api/backup", HTTP_GET, [](AsyncWebServerRequest* request) {
+        // Build metadata-only JSON (no asset blobs) to keep JsonDocument small
         JsonDocument doc;
         char buf[16];
 
@@ -273,8 +293,15 @@ void init_webserver() {
         save_btns_to_json("/win_btns.bin", "win_btns");
         save_btns_to_json("/mac_btns.bin", "mac_btns");
 
-        JsonObject assets = doc["assets"].to<JsonObject>();
+        // Serialize metadata to string first
+        String output;
+        serializeJson(doc, output);
+        doc.clear();  // free arena memory
+
+        // Append assets one at a time to avoid keeping all Base64 in RAM
+        output += ",\"assets\":{";
         File root = LittleFS.open("/");
+        bool firstAsset = true;
         if (root) {
             File assetFile = root.openNextFile();
             while (assetFile) {
@@ -288,32 +315,37 @@ void init_webserver() {
                     uint8_t* buf2 = (uint8_t*)malloc(size);
                     if (buf2) {
                         assetFile.read(buf2, size);
-                        assets[name] = base64::encode(buf2, size);
+                        String encoded = base64::encode(buf2, size);
                         free(buf2);
+
+                        if (!firstAsset) output += ",";
+                        firstAsset = false;
+                        output += "\"" + name + "\":\"" + encoded + "\"";
+                        // encoded goes out of scope → frees asset's Base64 before next iteration
                     }
+                    yield();
                 }
                 assetFile = root.openNextFile();
             }
         }
+        output += "}}";
 
-        String output;
-        serializeJson(doc, output);
         request->send(200, "application/json", output);
+        Serial.printf("BACKUP: Response size = %u bytes\n", output.length());
     });
 
     static const size_t MAX_RESTORE_SIZE = 512 * 1024;
 
     server.on("/api/restore", HTTP_POST, [](AsyncWebServerRequest* request) {
-        // Request handler runs after body is fully received.
-        // Body data was accumulated in static String by the body handler below.
-        // On last chunk, the body handler sets a flag via tempObject to signal we're done.
         Serial.println("RESTORE: request handler called");
+        set_pending_redundant_write(true);
 
         // Retrieve the accumulated body from tempObject
         char* body = (char*)request->_tempObject;
         if (!body || body[0] == '\0') {
             Serial.println("RESTORE: FAILED - no body data accumulated");
             if (body) { free(body); request->_tempObject = NULL; }
+            set_pending_redundant_write(false);
             request->send(400, "text/plain", "No body data");
             return;
         }
@@ -327,6 +359,7 @@ void init_webserver() {
             Serial.printf("RESTORE: FAILED - JSON parse error: %s\n", error.c_str());
             free(body);
             request->_tempObject = NULL;
+            set_pending_redundant_write(false);
             request->send(400, "text/plain", "JSON Parse Error");
             return;
         }
@@ -353,7 +386,6 @@ void init_webserver() {
                 String iconVal = b["icon"] | "";
                 if (iconVal == "None" || iconVal.isEmpty()) {
                     btns[i].icon[0] = '\0';
-                    Serial.printf("RESTORE:   btn[%d] label=\"%s\" icon=(empty)\n", i, btns[i].label);
                 } else {
                     String rawIcon = iconVal;
                     iconVal.toLowerCase();
@@ -370,7 +402,6 @@ void init_webserver() {
                             } else {
                                 btns[i].icon[0] = '\0';
                             }
-                            Serial.printf("RESTORE:   btn[%d] label=\"%s\" icon name=\"%s\" -> matched index %d\n", i, btns[i].label, rawIcon.c_str(), j);
                             found = true;
                             break;
                         }
@@ -378,13 +409,10 @@ void init_webserver() {
                     if (!found) {
                         strncpy(btns[i].icon, rawIcon.c_str(), 7);
                         btns[i].icon[7] = '\0';
-                        Serial.printf("RESTORE:   btn[%d] label=\"%s\" icon raw=\"%s\" (no name match, stored as-is)\n", i, btns[i].label, rawIcon.c_str());
                     }
                 }
 
                 strncpy(btns[i].imgPath, b["img"] | "", 31);
-                Serial.printf("RESTORE:   btn[%d] label=\"%s\" value=\"%s\" type=%u color=#%06X img=\"%s\"\n",
-                    i, btns[i].label, btns[i].value, btns[i].type, btns[i].color, btns[i].imgPath);
             }
             File f = LittleFS.open(path, "w");
             if (f) {
@@ -399,119 +427,111 @@ void init_webserver() {
         if (!doc["win_btns"].isNull()) {
             Serial.printf("RESTORE: win_btns array has %u entries\n", doc["win_btns"].as<JsonArray>().size());
             restore_btns(doc["win_btns"].as<JsonArray>(), "/win_btns.bin");
-        } else {
-            Serial.println("RESTORE: No win_btns in backup");
         }
         if (!doc["mac_btns"].isNull()) {
             Serial.printf("RESTORE: mac_btns array has %u entries\n", doc["mac_btns"].as<JsonArray>().size());
             restore_btns(doc["mac_btns"].as<JsonArray>(), "/mac_btns.bin");
-        } else {
-            Serial.println("RESTORE: No mac_btns in backup");
         }
+
+        // Optimized Base64 decode with pre-allocated buffer + yield points
+        static auto decode_b64 = [](const String& input, std::vector<uint8_t>& output) -> bool {
+            size_t approx = (input.length() / 4) * 3 + 3;
+            output.resize(approx);
+            size_t outPos = 0;
+            int i = 0;
+            uint8_t char_array_4[4], char_array_3[3];
+            auto b64_char = [](char c) -> int {
+                if (c >= 'A' && c <= 'Z') return c - 'A';
+                if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+                if (c >= '0' && c <= '9') return c - '0' + 52;
+                if (c == '+') return 62;
+                if (c == '/') return 63;
+                return -1;
+            };
+            for (size_t in_ = 0; in_ < input.length(); in_++) {
+                char c = input[in_];
+                if (c == '=') break;
+                int val = b64_char(c);
+                if (val == -1) continue;
+                char_array_4[i++] = (uint8_t)val;
+                if (i == 4) {
+                    if (outPos + 3 > output.size()) output.resize(output.size() + 3);
+                    char_array_3[0] = (char_array_4[0] << 2) | ((char_array_4[1] & 0x30) >> 4);
+                    char_array_3[1] = ((char_array_4[1] & 0xf) << 4) | ((char_array_4[2] & 0x3c) >> 2);
+                    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) | char_array_4[3];
+                    output[outPos++] = char_array_3[0];
+                    output[outPos++] = char_array_3[1];
+                    output[outPos++] = char_array_3[2];
+                    i = 0;
+                }
+            }
+            if (i) {
+                for (int j = i; j < 4; j++) char_array_4[j] = 0;
+                if (outPos + 3 > output.size()) output.resize(output.size() + 3);
+                char_array_3[0] = (char_array_4[0] << 2) | ((char_array_4[1] & 0x30) >> 4);
+                char_array_3[1] = ((char_array_4[1] & 0xf) << 4) | ((char_array_4[2] & 0x3c) >> 2);
+                char_array_3[2] = ((char_array_4[2] & 0x3) << 6) | char_array_4[3];
+                for (int j = 0; j < i - 1; j++) output[outPos++] = char_array_3[j];
+            }
+            output.resize(outPos);
+            return outPos > 0;
+        };
 
         if (!doc["assets"].isNull()) {
             JsonObject assets = doc["assets"].as<JsonObject>();
             int assetCount = 0;
             int assetTotal = 0;
             for (JsonPair kv : assets) { assetTotal++; }
-            Serial.printf("RESTORE: Restoring %d assets\n", assetTotal);
+
+            std::vector<uint8_t> decodeBuf;
+            decodeBuf.reserve(65536);  // pre-allocate 64KB for decode buffer
 
             for (JsonPair kv : assets) {
                 String filename = kv.key().c_str();
                 if (!filename.startsWith("/")) filename = "/" + filename;
                 String b64 = kv.value().as<String>();
-                Serial.printf("RESTORE:   Asset[%d/%d] %s base64_len=%u\n", assetCount + 1, assetTotal, filename.c_str(), b64.length());
 
-                auto decode = [](String input) -> std::vector<uint8_t> {
-                    std::vector<uint8_t> ret;
-                    int i = 0;
-                    uint8_t char_array_4[4], char_array_3[3];
-                    auto b64_char = [](char c) -> int {
-                        if (c >= 'A' && c <= 'Z') return c - 'A';
-                        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-                        if (c >= '0' && c <= '9') return c - '0' + 52;
-                        if (c == '+') return 62;
-                        if (c == '/') return 63;
-                        return -1;
-                    };
-                    for (size_t in_ = 0; in_ < input.length(); in_++) {
-                        char c = input[in_];
-                        if (c == '=') break;
-                        int val = b64_char(c);
-                        if (val == -1) continue;
-                        char_array_4[i++] = (uint8_t)val;
-                        if (i == 4) {
-                            char_array_3[0] = (char_array_4[0] << 2) | ((char_array_4[1] & 0x30) >> 4);
-                            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) | ((char_array_4[2] & 0x3c) >> 2);
-                            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) | char_array_4[3];
-                            for (i = 0; i < 3; i++) ret.push_back(char_array_3[i]);
-                            i = 0;
-                        }
-                    }
-                    if (i) {
-                        for (int j = i; j < 4; j++) char_array_4[j] = 0;
-                        char_array_3[0] = (char_array_4[0] << 2) | ((char_array_4[1] & 0x30) >> 4);
-                        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) | ((char_array_4[2] & 0x3c) >> 2);
-                        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) | char_array_4[3];
-                        for (int j = 0; j < i - 1; j++) ret.push_back(char_array_3[j]);
-                    }
-                    return ret;
-                };
-
-                std::vector<uint8_t> decoded = decode(b64);
-                if (decoded.size() > 0) {
+                decodeBuf.clear();
+                if (decode_b64(b64, decodeBuf) && decodeBuf.size() > 0) {
                     File f = LittleFS.open(filename, "w");
                     if (f) {
-                        f.write(decoded.data(), decoded.size());
+                        f.write(decodeBuf.data(), decodeBuf.size());
                         f.close();
-                        Serial.printf("RESTORE:   Asset %s written OK (%u bytes)\n", filename.c_str(), decoded.size());
-                    } else {
-                        Serial.printf("RESTORE:   FAILED to open %s for writing\n", filename.c_str());
                     }
-                } else {
-                    Serial.printf("RESTORE:   FAILED to decode base64 for %s\n", filename.c_str());
                 }
                 assetCount++;
+                Serial.printf("RESTORE: Asset[%d/%d] %s (%u bytes)\n", assetCount, assetTotal, filename.c_str(), decodeBuf.size());
+
+                // Yield every 5 assets to let watchdog and UI breathe
+                if (assetCount % 5 == 0) {
+                    io_yield();
+                }
             }
             Serial.printf("RESTORE: Assets done (%d/%d)\n", assetCount, assetTotal);
         } else {
             Serial.println("RESTORE: No assets in backup");
         }
 
-        // Load restored buttons into g_configs without touching NVS
         {
             const char* restore_file = (g_target_os == OS_WINDOWS ? "/win_btns.bin" : "/mac_btns.bin");
-            Serial.printf("RESTORE: Loading active file %s into g_configs\n", restore_file);
             File ff = LittleFS.open(restore_file, "r");
             if (ff) {
-                size_t read = ff.read((uint8_t*)g_configs, sizeof(g_configs));
+                ff.read((uint8_t*)g_configs, sizeof(g_configs));
                 ff.close();
-                Serial.printf("RESTORE: Read %u bytes from %s\n", read, restore_file);
-            } else {
-                Serial.printf("RESTORE: FAILED to open %s for reading\n", restore_file);
             }
         }
 
-        Serial.printf("RESTORE: g_configs[0].label=\"%s\" value=\"%s\" type=%u\n",
-            g_configs[0].label, g_configs[0].value, g_configs[0].type);
-        Serial.printf("RESTORE: g_configs[2].label=\"%s\" value=\"%s\"\n",
-            g_configs[2].label, g_configs[2].value);
-
-        Serial.println("RESTORE: Calling save_settings(true)...");
         save_settings(true);
-        Serial.println("RESTORE: save_settings() done");
+        set_pending_redundant_write(false);
 
-        Serial.printf("RESTORE: Final values -> bg=#%06X rows=%u cols=%u os=%u lang=%u wifi_ssid=%s\n",
-            g_bg_color, g_rows, g_cols, g_target_os, g_kb_lang, g_wifi_ssid);
-
-        Serial.println("RESTORE: Backup restored successfully, scheduling UI refresh");
-
+        mark_all_dirty();
         g_pending_ui_update = true;
 
         free(body);
         request->_tempObject = NULL;
 
         request->send(200, "text/plain", "Restore OK");
+        Serial.println("RESTORE: Done");
     }, NULL, [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
         // Body handler: accumulate raw body data into request->_tempObject
         if (index == 0) {
@@ -519,23 +539,18 @@ void init_webserver() {
                 free(request->_tempObject);
                 request->_tempObject = NULL;
             }
-            Serial.printf("RESTORE: body handler start, total=%u bytes\n", total);
         }
         if (total == 0 || total > MAX_RESTORE_SIZE) {
-            // No Content-Length or too large
-            Serial.printf("RESTORE: body handler SKIP (total=%u)\n", total);
             return;
         }
         if (!request->_tempObject) {
             request->_tempObject = malloc(total + 1);
             if (!request->_tempObject) {
-                Serial.println("RESTORE: FAILED to allocate body buffer");
                 return;
             }
             memset(request->_tempObject, 0, total + 1);
         }
         memcpy((uint8_t*)(request->_tempObject) + index, data, len);
-        Serial.printf("RESTORE: body chunk index=%u len=%u (total=%u)\n", index, len, total);
     });
 
     server.on("/api/files", HTTP_GET, [](AsyncWebServerRequest* request) {
