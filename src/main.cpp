@@ -15,7 +15,7 @@ void setup()
   delay(200);
   Serial.println("\n\n=== PandaTouch StreamDeck Starting ===");
 
-  pt_setup_display(PT_LVGL_RENDER_FULL_2);
+  pt_setup_display(PT_LVGL_RENDER_PARTIAL_2_PSRAM);
   StreamDeckApp::setup();
   pt_set_backlight(g_brightness, true);
 }

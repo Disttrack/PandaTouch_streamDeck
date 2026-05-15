@@ -19,7 +19,7 @@
 #endif
 
 #ifndef PT_LCD_RENDER_BOUNCE_LINES
-#define PT_LCD_RENDER_BOUNCE_LINES 10
+#define PT_LCD_RENDER_BOUNCE_LINES 200
 #endif
 
 /* =========================
